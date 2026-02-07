@@ -1,0 +1,32 @@
+# Memtrace Configuration
+# LLM-agnostic memory layer for AI agents
+# https://github.com/Basekick-Labs/memtrace
+
+[server]
+host = "0.0.0.0"
+port = 9100
+read_timeout = 30
+write_timeout = 30
+shutdown_timeout = 30
+
+[log]
+level = "info"
+format = "console"    # "json" for production
+
+[arc]
+url = "http://localhost:8000"
+api_key = ""
+database = "memory"
+measurement = "events"
+connect_timeout = 5
+query_timeout = 30
+write_batch_size = 100
+write_flush_interval_ms = 1000
+
+[auth]
+enabled = true
+db_path = "./data/memtrace.db"
+
+[dedup]
+enabled = true
+window_hours = 24
