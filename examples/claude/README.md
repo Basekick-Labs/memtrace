@@ -55,6 +55,33 @@ python examples/claude/multi_agent.py
 
 This pattern enables agent pipelines, handoffs, and collaborative workflows where specialized agents build on each other's work.
 
+### Telegram Customer Support (`telegram_support.py`)
+
+Three Telegram bots acting as customer support departments for a fictional telco "TeleCo":
+
+- **Juan** — Internet Support (troubleshooting, router issues, plan upgrades)
+- **Martin** — TV Support (channels, set-top box, HBO/sports packages)
+- **Cecilia** — Billing (charges, credits, disputes, discounts)
+
+A customer chats with one bot, then contacts another — each bot sees the full history from all departments via Memtrace shared sessions. Features include:
+
+- **Cross-department memory sharing** — recall/search by `session_id` (sees all bots), write with `agent_id` (attribution)
+- **Session resume on restart** — finds active sessions in Memtrace by `account_id` metadata
+- **Photo support** — customers can send photos (e.g. error screenshots) via multimodal Claude messages
+- **Identity verification** — first-name lookup against test customer database
+
+Requires 3 Telegram bot tokens (create via [@BotFather](https://t.me/BotFather)):
+
+```bash
+export BOT_TOKEN_INTERNET="<telegram bot token>"
+export BOT_TOKEN_TV="<telegram bot token>"
+export BOT_TOKEN_BILLING="<telegram bot token>"
+
+python examples/claude/telegram_support.py
+```
+
+Test customers: `nacho`, `maria`, `alex` — message any bot with a first name to verify.
+
 ## Memory Loop Pattern
 
 Both examples follow the same core pattern:
