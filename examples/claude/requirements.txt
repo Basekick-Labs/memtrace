@@ -1,0 +1,2 @@
+anthropic>=0.40.0
+memtrace-sdk>=0.1.0
