@@ -68,6 +68,7 @@ func main() {
 	if err := arcCli.Ping(ctx); err != nil {
 		logger.Fatal().Err(err).Str("arc_url", cfg.Arc.URL).Msg("Failed to connect to Arc")
 	}
+	arcCli.MarkConnected()
 	logger.Info().Str("arc_url", cfg.Arc.URL).Msg("Arc connection verified")
 
 	// Initialize metadata DB
