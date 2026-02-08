@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/memtrace_logo.png" alt="Memtrace — Memory layer for AI agents" width="800" />
+</p>
+
 # Memtrace
 
 **LLM-agnostic memory layer for AI agents.** Works with ChatGPT, Claude, Gemini, DeepSeek, Llama — any LLM.
