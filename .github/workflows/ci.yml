@@ -36,6 +36,9 @@ jobs:
       - name: Build
         run: CGO_ENABLED=1 go build ./cmd/... ./internal/... ./pkg/...
 
+      - name: Build MCP server
+        run: CGO_ENABLED=0 go build -o memtrace-mcp ./cmd/mcp/
+
       - name: Test
         run: go test ./internal/... ./pkg/... -v
 

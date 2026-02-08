@@ -1,9 +1,13 @@
-.PHONY: build run test clean docker
+.PHONY: build build-mcp run test clean docker
 
 BINARY=memtrace
+MCP_BINARY=memtrace-mcp
 
 build:
 	CGO_ENABLED=1 go build -o $(BINARY) ./cmd/memtrace/
+
+build-mcp:
+	CGO_ENABLED=0 go build -o $(MCP_BINARY) ./cmd/mcp/
 
 run: build
 	./$(BINARY)
@@ -12,7 +16,7 @@ test:
 	go test ./internal/... ./pkg/... -v
 
 clean:
-	rm -f $(BINARY)
+	rm -f $(BINARY) $(MCP_BINARY)
 	rm -rf data/
 
 docker:
