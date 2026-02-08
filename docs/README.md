@@ -144,6 +144,36 @@ Configure in Claude Code (`.mcp.json`):
 
 7 tools are available: `memtrace_remember`, `memtrace_recall`, `memtrace_search`, `memtrace_decide`, `memtrace_session_create`, `memtrace_session_context`, `memtrace_agent_register`. See the [MCP docs](./mcp.md) for full details.
 
+## Python SDK
+
+```bash
+pip install memtrace-sdk
+```
+
+```python
+from memtrace import Memtrace
+
+client = Memtrace("http://localhost:9100", "mtk_...")
+
+# Quick add
+client.remember("my_agent", "Posted tweet about Go generics")
+
+# Recall recent
+memories = client.recall("my_agent", since="48h")
+
+# Log a decision
+client.decide("my_agent", "post_to_twitter", "feed had interesting content")
+
+# Full API
+client.add_memory(AddMemoryRequest(...))
+client.list_memories(ListOptions(...))
+client.search_memories(SearchQuery(...))
+client.create_session(CreateSessionRequest(...))
+client.get_session_context(session_id, ContextOptions(...))
+```
+
+Async support: `from memtrace import AsyncMemtrace`. See the [Python SDK README](../sdks/python/README.md) for full docs.
+
 ## Go SDK
 
 ```go
