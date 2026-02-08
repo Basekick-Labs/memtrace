@@ -174,6 +174,36 @@ client.get_session_context(session_id, ContextOptions(...))
 
 Async support: `from memtrace import AsyncMemtrace`. See the [Python SDK README](../sdks/python/README.md) for full docs.
 
+## TypeScript SDK
+
+```bash
+npm install @memtrace/sdk
+```
+
+```typescript
+import { Memtrace } from '@memtrace/sdk'
+
+const client = new Memtrace('http://localhost:9100', 'mtk_...')
+
+// Quick add
+await client.remember('my_agent', 'Posted tweet about Go generics')
+
+// Recall recent
+const memories = await client.recall('my_agent', '48h')
+
+// Log a decision
+await client.decide('my_agent', 'post_to_twitter', 'feed had interesting content')
+
+// Full API
+await client.addMemory({ ... })
+await client.listMemories({ ... })
+await client.searchMemories({ ... })
+await client.createSession({ ... })
+await client.getSessionContext(sessionId, { ... })
+```
+
+Zero runtime dependencies, native `fetch` (Node.js 18+). See the [TypeScript SDK README](../sdks/typescript/README.md) for full docs.
+
 ## Go SDK
 
 ```go
