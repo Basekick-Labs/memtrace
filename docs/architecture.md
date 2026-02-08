@@ -94,7 +94,9 @@ Writes are buffered in-memory and flushed to Arc in batches (configurable size a
 
 ```
 memtrace/
-├── cmd/memtrace/          # Entry point
+├── cmd/
+│   ├── memtrace/          # Main server entry point
+│   └── mcp/               # MCP server (stdio, CGO_ENABLED=0)
 ├── internal/
 │   ├── api/               # HTTP handlers (Fiber)
 │   ├── arc/               # Arc HTTP client

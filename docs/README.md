@@ -118,6 +118,32 @@ curl -X POST http://localhost:9100/api/v1/sessions/sess_abc/context \
   -d '{"since": "4h", "include_types": ["episodic", "decision"]}'
 ```
 
+## MCP Server (Claude Code, Cursor, etc.)
+
+Memtrace ships an MCP server for integration with Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Zed, and other MCP-compatible tools.
+
+```bash
+make build-mcp
+```
+
+Configure in Claude Code (`.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "memtrace": {
+      "command": "/path/to/memtrace-mcp",
+      "env": {
+        "MEMTRACE_URL": "http://localhost:9100",
+        "MEMTRACE_API_KEY": "mtk_..."
+      }
+    }
+  }
+}
+```
+
+7 tools are available: `memtrace_remember`, `memtrace_recall`, `memtrace_search`, `memtrace_decide`, `memtrace_session_create`, `memtrace_session_context`, `memtrace_agent_register`. See the [MCP docs](./mcp.md) for full details.
+
 ## Go SDK
 
 ```go
@@ -147,6 +173,7 @@ client.GetSessionContext(ctx, sessionID, &sdk.ContextOptions{...})
 - [Architecture](./architecture.md) — How Memtrace works under the hood
 - [API Reference](./api.md) — Complete REST API documentation
 - [Configuration](./configuration.md) — All config options, environment variables, and deployment
+- [MCP Server](./mcp.md) — Model Context Protocol server for Claude Code, Cursor, and more
 
 ## How It Works
 
