@@ -5,19 +5,22 @@ import (
 	"github.com/Basekick-Labs/memtrace/internal/memory"
 	"github.com/Basekick-Labs/memtrace/internal/session"
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog"
 )
 
 // SessionHandler handles session endpoints
 type SessionHandler struct {
 	sessionManager *session.Manager
 	memoryManager  *memory.Manager
+	logger         zerolog.Logger
 }
 
 // NewSessionHandler creates a new session handler
-func NewSessionHandler(sessionManager *session.Manager, memoryManager *memory.Manager) *SessionHandler {
+func NewSessionHandler(sessionManager *session.Manager, memoryManager *memory.Manager, logger zerolog.Logger) *SessionHandler {
 	return &SessionHandler{
 		sessionManager: sessionManager,
 		memoryManager:  memoryManager,
+		logger:         logger.With().Str("component", "session-handler").Logger(),
 	}
 }
 
@@ -47,6 +50,8 @@ func (h *SessionHandler) handleCreate(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+
+	h.logger.Info().Str("org_id", orgID).Str("session_id", s.ID).Str("agent_id", req.AgentID).Msg("Session created")
 
 	return c.Status(fiber.StatusCreated).JSON(s)
 }
@@ -150,6 +155,8 @@ func (h *SessionHandler) handleContext(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+
+	h.logger.Info().Str("org_id", orgID).Str("session_id", sessionID).Int("memory_count", ctx.MemoryCount).Msg("Session context loaded")
 
 	return c.JSON(ctx)
 }

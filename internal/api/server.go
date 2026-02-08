@@ -47,7 +47,7 @@ func NewServer(
 	app.Use(func(c *fiber.Ctx) error {
 		start := time.Now()
 		err := c.Next()
-		logger.Debug().
+		logger.Info().
 			Str("method", c.Method()).
 			Str("path", c.Path()).
 			Int("status", c.Response().StatusCode()).
@@ -67,16 +67,16 @@ func NewServer(
 	}
 
 	// Register handlers
-	memoryHandler := NewMemoryHandler(memoryManager)
+	memoryHandler := NewMemoryHandler(memoryManager, logger)
 	memoryHandler.RegisterRoutes(apiGroup)
 
-	agentHandler := NewAgentHandler(agentManager, memoryManager)
+	agentHandler := NewAgentHandler(agentManager, memoryManager, logger)
 	agentHandler.RegisterRoutes(apiGroup)
 
-	sessionHandler := NewSessionHandler(sessionManager, memoryManager)
+	sessionHandler := NewSessionHandler(sessionManager, memoryManager, logger)
 	sessionHandler.RegisterRoutes(apiGroup)
 
-	searchHandler := NewSearchHandler(memoryManager)
+	searchHandler := NewSearchHandler(memoryManager, logger)
 	searchHandler.RegisterRoutes(apiGroup)
 
 	return &Server{

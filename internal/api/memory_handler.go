@@ -4,16 +4,21 @@ import (
 	"github.com/Basekick-Labs/memtrace/internal/auth"
 	"github.com/Basekick-Labs/memtrace/internal/memory"
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog"
 )
 
 // MemoryHandler handles memory CRUD endpoints
 type MemoryHandler struct {
 	manager *memory.Manager
+	logger  zerolog.Logger
 }
 
 // NewMemoryHandler creates a new memory handler
-func NewMemoryHandler(manager *memory.Manager) *MemoryHandler {
-	return &MemoryHandler{manager: manager}
+func NewMemoryHandler(manager *memory.Manager, logger zerolog.Logger) *MemoryHandler {
+	return &MemoryHandler{
+		manager: manager,
+		logger:  logger.With().Str("component", "memory-handler").Logger(),
+	}
 }
 
 // RegisterRoutes registers memory routes
@@ -35,6 +40,7 @@ func (h *MemoryHandler) handleCreate(c *fiber.Ctx) error {
 				"error": err.Error(),
 			})
 		}
+		h.logger.Info().Str("org_id", orgID).Int("count", len(results)).Msg("Batch memory create")
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 			"memories": results,
 			"count":    len(results),
@@ -52,6 +58,7 @@ func (h *MemoryHandler) handleCreate(c *fiber.Ctx) error {
 	mem, err := h.manager.Create(c.Context(), orgID, &req)
 	if err != nil {
 		if err == memory.ErrDuplicate {
+			h.logger.Debug().Str("org_id", orgID).Str("agent_id", req.AgentID).Msg("Duplicate memory rejected")
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": "duplicate memory",
 			})
@@ -60,6 +67,13 @@ func (h *MemoryHandler) handleCreate(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+
+	h.logger.Info().
+		Str("org_id", orgID).
+		Str("agent_id", req.AgentID).
+		Str("memory_type", req.MemoryType).
+		Str("event_type", req.EventType).
+		Msg("Memory created")
 
 	return c.Status(fiber.StatusCreated).JSON(mem)
 }
@@ -86,6 +100,12 @@ func (h *MemoryHandler) handleList(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+
+	h.logger.Info().
+		Str("org_id", orgID).
+		Str("agent_id", opts.AgentID).
+		Int("count", list.Count).
+		Msg("Memory list")
 
 	return c.JSON(list)
 }

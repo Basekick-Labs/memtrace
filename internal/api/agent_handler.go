@@ -7,19 +7,22 @@ import (
 	"github.com/Basekick-Labs/memtrace/internal/auth"
 	"github.com/Basekick-Labs/memtrace/internal/memory"
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog"
 )
 
 // AgentHandler handles agent endpoints
 type AgentHandler struct {
 	agentManager  *agent.Manager
 	memoryManager *memory.Manager
+	logger        zerolog.Logger
 }
 
 // NewAgentHandler creates a new agent handler
-func NewAgentHandler(agentManager *agent.Manager, memoryManager *memory.Manager) *AgentHandler {
+func NewAgentHandler(agentManager *agent.Manager, memoryManager *memory.Manager, logger zerolog.Logger) *AgentHandler {
 	return &AgentHandler{
 		agentManager:  agentManager,
 		memoryManager: memoryManager,
+		logger:        logger.With().Str("component", "agent-handler").Logger(),
 	}
 }
 
@@ -54,6 +57,8 @@ func (h *AgentHandler) handleCreate(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+
+	h.logger.Info().Str("org_id", orgID).Str("agent_id", a.ID).Str("name", req.Name).Msg("Agent registered")
 
 	return c.Status(fiber.StatusCreated).JSON(a)
 }
@@ -143,6 +148,8 @@ func (h *AgentHandler) handleDelete(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+
+	h.logger.Info().Str("org_id", orgID).Str("agent_id", agentID).Msg("Agent deleted")
 
 	return c.SendStatus(fiber.StatusNoContent)
 }
