@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strings"
+
 	"github.com/Basekick-Labs/memtrace/internal/agent"
 	"github.com/Basekick-Labs/memtrace/internal/auth"
 	"github.com/Basekick-Labs/memtrace/internal/memory"
@@ -43,6 +45,11 @@ func (h *AgentHandler) handleCreate(c *fiber.Ctx) error {
 
 	a, err := h.agentManager.Create(c.Context(), orgID, &req)
 	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})

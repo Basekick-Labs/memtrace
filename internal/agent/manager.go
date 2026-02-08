@@ -117,8 +117,8 @@ func (m *Manager) Get(ctx context.Context, orgID, agentID string) (*Agent, error
 
 	err := m.db.QueryRowContext(ctx, `
 		SELECT id, org_id, name, description, config_json, created_at, last_active_at
-		FROM agents WHERE id = ? AND org_id = ?
-	`, agentID, orgID).Scan(&id, &org, &name, &description, &configJSON, &createdAt, &lastActive)
+		FROM agents WHERE (id = ? OR name = ?) AND org_id = ?
+	`, agentID, agentID, orgID).Scan(&id, &org, &name, &description, &configJSON, &createdAt, &lastActive)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
