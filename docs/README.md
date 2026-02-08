@@ -228,6 +228,34 @@ client.CreateSession(ctx, &sdk.CreateSessionRequest{...})
 client.GetSessionContext(ctx, sessionID, &sdk.ContextOptions{...})
 ```
 
+## Framework Integrations
+
+### OpenAI Agents SDK
+
+```bash
+pip install openai-agents-memtrace
+```
+
+```python
+from agents import Agent, Runner
+from memtrace import AsyncMemtrace
+from openai_agents_memtrace import create_memtrace_tools, MemtraceSession
+
+client = AsyncMemtrace("http://localhost:9100", "mtk_...")
+tools = create_memtrace_tools(client, agent_id="my_agent")
+session = await MemtraceSession.create(client, agent_id="my_agent")
+
+agent = Agent(
+    name="My Agent",
+    instructions="Use memtrace_remember to store info, memtrace_recall to retrieve it.",
+    tools=tools,
+)
+
+result = await Runner.run(agent, "Hello", session=session)
+```
+
+4 tools: `memtrace_remember`, `memtrace_recall`, `memtrace_search`, `memtrace_decide`. See the [OpenAI Agents integration README](../integrations/openai-agents/README.md) for full docs.
+
 ## Documentation
 
 - [Architecture](./architecture.md) — How Memtrace works under the hood

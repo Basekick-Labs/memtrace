@@ -110,6 +110,7 @@ memtrace/
 ├── pkg/sdk/               # Go SDK (public)
 ├── sdks/python/           # Python SDK (PyPI: memtrace-sdk)
 ├── sdks/typescript/       # TypeScript SDK (npm: @memtrace/sdk)
+├── integrations/openai-agents/  # OpenAI Agents SDK integration
 ├── memtrace.toml          # Default config
 ├── Dockerfile
 └── Makefile

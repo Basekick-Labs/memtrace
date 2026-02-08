@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openai-agents-memtrace"
+dynamic = ["version"]
+description = "Memtrace memory tools for the OpenAI Agents SDK"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{ name = "Basekick Labs" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "memtrace-sdk>=0.1.0",
+    "openai-agents>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+]
+
+[project.urls]
+Homepage = "https://memtrace.ai"
+Repository = "https://github.com/Basekick-Labs/memtrace"
+Documentation = "https://docs.basekick.net/memtrace"
+
+[tool.hatch.version]
+path = "src/openai_agents_memtrace/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openai_agents_memtrace"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
