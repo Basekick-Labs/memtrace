@@ -12,18 +12,18 @@ const (
 
 // Memory represents a stored memory event
 type Memory struct {
-	Time         time.Time              `json:"time"`
-	OrgID        string                 `json:"org_id"`
-	AgentID      string                 `json:"agent_id"`
-	SessionID    string                 `json:"session_id,omitempty"`
-	MemoryType   string                 `json:"memory_type"`
-	EventType    string                 `json:"event_type"`
-	Content      string                 `json:"content"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Tags         []string               `json:"tags,omitempty"`
-	DedupKey     string                 `json:"dedup_key,omitempty"`
-	Importance   float64                `json:"importance,omitempty"`
-	ParentID     string                 `json:"parent_id,omitempty"`
+	Time       time.Time              `json:"time"`
+	OrgID      string                 `json:"org_id"`
+	AgentID    string                 `json:"agent_id"`
+	SessionID  string                 `json:"session_id,omitempty"`
+	MemoryType string                 `json:"memory_type"`
+	EventType  string                 `json:"event_type"`
+	Content    string                 `json:"content"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Tags       []string               `json:"tags,omitempty"`
+	DedupKey   string                 `json:"dedup_key,omitempty"`
+	Importance float64                `json:"importance,omitempty"`
+	ParentID   string                 `json:"parent_id,omitempty"`
 }
 
 // CreateRequest is the request body for creating a memory

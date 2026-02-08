@@ -25,12 +25,12 @@ type Client struct {
 	logger     zerolog.Logger
 
 	// Write batching
-	batchSize      int
-	flushInterval  time.Duration
-	buffer         []map[string]interface{}
-	bufferMu       sync.Mutex
-	flushTicker    *time.Ticker
-	stopCh         chan struct{}
+	batchSize     int
+	flushInterval time.Duration
+	buffer        []map[string]interface{}
+	bufferMu      sync.Mutex
+	flushTicker   *time.Ticker
+	stopCh        chan struct{}
 }
 
 // NewClient creates a new Arc HTTP client
