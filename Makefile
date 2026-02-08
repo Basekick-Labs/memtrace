@@ -1,4 +1,4 @@
-.PHONY: build build-mcp run test clean docker
+.PHONY: build build-mcp run test clean docker validate-api
 
 BINARY=memtrace
 MCP_BINARY=memtrace-mcp
@@ -30,3 +30,6 @@ vet:
 
 lint: fmt vet
 	go build ./cmd/... ./internal/... ./pkg/...
+
+validate-api:
+	npx @redocly/cli lint docs/openapi.yaml

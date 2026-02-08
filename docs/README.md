@@ -174,6 +174,7 @@ client.GetSessionContext(ctx, sessionID, &sdk.ContextOptions{...})
 - [API Reference](./api.md) — Complete REST API documentation
 - [Configuration](./configuration.md) — All config options, environment variables, and deployment
 - [MCP Server](./mcp.md) — Model Context Protocol server for Claude Code, Cursor, and more
+- [OpenAPI Spec](./openapi.yaml) — OpenAPI 3.0 specification for all REST endpoints
 
 ## How It Works
 

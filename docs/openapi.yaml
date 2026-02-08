@@ -1,0 +1,1022 @@
+openapi: 3.0.3
+info:
+  title: Memtrace API
+  description: |
+    LLM-agnostic memory layer for AI agents. Store, recall, and search
+    temporal memories. Works with ChatGPT, Claude, Gemini, DeepSeek, Llama — any LLM.
+  version: 0.1.0
+  contact:
+    name: Basekick Labs
+    url: https://github.com/Basekick-Labs/memtrace
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:9100
+    description: Local development
+
+tags:
+  - name: Health
+    description: Service health and readiness
+  - name: Memories
+    description: Memory CRUD and listing
+  - name: Search
+    description: Structured memory search
+  - name: Agents
+    description: Agent registration and management
+  - name: Sessions
+    description: Session lifecycle and LLM context
+
+# ──────────────────────────────────────────────
+# Paths
+# ──────────────────────────────────────────────
+
+paths:
+  # ── Health ──────────────────────────────────
+
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: memtrace
+                  uptime:
+                    type: string
+                    example: 2h30m15s
+
+  /ready:
+    get:
+      operationId: getReady
+      tags: [Health]
+      summary: Readiness check (Arc connectivity)
+      security: []
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  arc:
+                    type: string
+                    example: connected
+        "503":
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: not ready
+                  error:
+                    type: string
+                    example: "Arc is unreachable: connection refused"
+
+  # ── Memories ────────────────────────────────
+
+  /api/v1/memories:
+    post:
+      operationId: createMemory
+      tags: [Memories]
+      summary: Create a memory (single or batch)
+      description: |
+        Accepts either a single memory object or a batch request with a `memories` array.
+        The server detects the format automatically.
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/CreateMemoryRequest"
+                - $ref: "#/components/schemas/BatchCreateMemoryRequest"
+      responses:
+        "201":
+          description: Memory created
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/Memory"
+                  - $ref: "#/components/schemas/BatchCreateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Duplicate memory detected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      operationId: listMemories
+      tags: [Memories]
+      summary: List memories with filters
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: query
+          schema:
+            type: string
+        - name: session_id
+          in: query
+          schema:
+            type: string
+        - name: memory_type
+          in: query
+          schema:
+            type: string
+            enum: [episodic, session, decision, entity]
+        - name: event_type
+          in: query
+          schema:
+            type: string
+        - name: tags
+          in: query
+          description: Comma-separated tags (AND match)
+          schema:
+            type: string
+        - name: since
+          in: query
+          description: "Relative (e.g. 2h, 7d) or ISO 8601 timestamp"
+          schema:
+            type: string
+        - name: until
+          in: query
+          description: "Relative or ISO 8601 timestamp"
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Order"
+      responses:
+        "200":
+          description: List of memories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/memories/{id}:
+    get:
+      operationId: getMemory
+      tags: [Memories]
+      summary: Get a memory by ID
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Memory found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Memory"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Search ──────────────────────────────────
+
+  /api/v1/search:
+    post:
+      operationId: searchMemories
+      tags: [Search]
+      summary: Search memories with structured filters
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchQuery"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Agents ──────────────────────────────────
+
+  /api/v1/agents:
+    post:
+      operationId: createAgent
+      tags: [Agents]
+      summary: Register a new agent
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRequest"
+      responses:
+        "201":
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      operationId: listAgents
+      tags: [Agents]
+      summary: List all agents
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Agent"
+                  count:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/agents/{id}:
+    get:
+      operationId: getAgent
+      tags: [Agents]
+      summary: Get an agent by ID
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Agent found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      operationId: deleteAgent
+      tags: [Agents]
+      summary: Delete an agent
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "204":
+          description: Agent deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/agents/{id}/memories:
+    get:
+      operationId: listAgentMemories
+      tags: [Agents]
+      summary: List memories for an agent
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - name: memory_type
+          in: query
+          schema:
+            type: string
+            enum: [episodic, session, decision, entity]
+        - name: event_type
+          in: query
+          schema:
+            type: string
+        - name: since
+          in: query
+          description: "Relative (e.g. 2h, 7d) or ISO 8601. Default: 24h"
+          schema:
+            type: string
+            default: "24h"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Order"
+      responses:
+        "200":
+          description: List of memories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/agents/{id}/stats:
+    get:
+      operationId: getAgentStats
+      tags: [Agents]
+      summary: Get memory statistics for an agent
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Agent statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Sessions ────────────────────────────────
+
+  /api/v1/sessions:
+    post:
+      operationId: createSession
+      tags: [Sessions]
+      summary: Create a new session
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      operationId: listSessions
+      tags: [Sessions]
+      summary: List sessions
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: query
+          description: Filter by agent ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Session"
+                  count:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/sessions/{id}:
+    get:
+      operationId: getSession
+      tags: [Sessions]
+      summary: Get a session by ID
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Session found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    put:
+      operationId: updateSession
+      tags: [Sessions]
+      summary: Update session status or metadata
+      description: |
+        Setting status to `closed` will automatically populate `closed_at`.
+        Metadata is merged with existing values.
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionRequest"
+      responses:
+        "200":
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/sessions/{id}/memories:
+    get:
+      operationId: listSessionMemories
+      tags: [Sessions]
+      summary: List memories for a session
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: memory_type
+          in: query
+          schema:
+            type: string
+            enum: [episodic, session, decision, entity]
+        - name: since
+          in: query
+          description: "Relative (e.g. 2h, 7d) or ISO 8601"
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Order"
+      responses:
+        "200":
+          description: List of memories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/sessions/{id}/context:
+    post:
+      operationId: getSessionContext
+      tags: [Sessions]
+      summary: Get LLM-ready session context
+      description: |
+        Returns memories for a session formatted as markdown, grouped by type
+        (actions, decisions, errors, other). Ready to inject into any LLM prompt.
+      security:
+        - ApiKeyHeader: []
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContextOptions"
+      responses:
+        "200":
+          description: Session context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionContext"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+# ──────────────────────────────────────────────
+# Components
+# ──────────────────────────────────────────────
+
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: "Memtrace API key (mtk_ prefix)"
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: "Bearer token using mtk_ API key"
+
+  parameters:
+    AgentId:
+      name: id
+      in: path
+      required: true
+      description: Agent ID
+      schema:
+        type: string
+        example: agent_abc123
+
+    SessionId:
+      name: id
+      in: path
+      required: true
+      description: Session ID
+      schema:
+        type: string
+        example: sess_xyz789
+
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of results
+      schema:
+        type: integer
+        default: 100
+        minimum: 1
+        maximum: 1000
+
+    Offset:
+      name: offset
+      in: query
+      description: Pagination offset
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+
+    Order:
+      name: order
+      in: query
+      description: Sort order
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # ── Memory schemas ────────────────────────
+
+    Memory:
+      type: object
+      required: [time, org_id, agent_id, memory_type, event_type, content]
+      properties:
+        time:
+          type: string
+          format: date-time
+          example: "2026-02-08T10:30:45Z"
+        org_id:
+          type: string
+          example: org_default
+        agent_id:
+          type: string
+          example: agent_web_crawler
+        session_id:
+          type: string
+          example: sess_abc123
+        memory_type:
+          type: string
+          enum: [episodic, session, decision, entity]
+          example: episodic
+        event_type:
+          type: string
+          example: page_crawled
+        content:
+          type: string
+          example: "Crawled https://example.com — found 3 product pages"
+        metadata:
+          type: object
+          additionalProperties: true
+          example: { "url": "https://example.com", "pages_found": 3 }
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["crawling", "products"]
+        dedup_key:
+          type: string
+        importance:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          example: 0.7
+        parent_id:
+          type: string
+
+    CreateMemoryRequest:
+      type: object
+      required: [agent_id, content]
+      properties:
+        agent_id:
+          type: string
+          example: agent_web_crawler
+        session_id:
+          type: string
+        memory_type:
+          type: string
+          enum: [episodic, session, decision, entity]
+          default: episodic
+        event_type:
+          type: string
+          default: general
+        content:
+          type: string
+          example: "Crawled https://example.com — found 3 product pages"
+        metadata:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+        dedup_key:
+          type: string
+        importance:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        parent_id:
+          type: string
+
+    BatchCreateMemoryRequest:
+      type: object
+      required: [memories]
+      properties:
+        memories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateMemoryRequest"
+          minItems: 1
+
+    BatchCreateResponse:
+      type: object
+      properties:
+        memories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Memory"
+        count:
+          type: integer
+
+    MemoryList:
+      type: object
+      properties:
+        memories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Memory"
+        count:
+          type: integer
+        has_more:
+          type: boolean
+
+    # ── Search schemas ────────────────────────
+
+    SearchQuery:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        session_id:
+          type: string
+        memory_types:
+          type: array
+          items:
+            type: string
+            enum: [episodic, session, decision, entity]
+        event_types:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        content_contains:
+          type: string
+          description: Text search within memory content
+        since:
+          type: string
+          description: "Relative (e.g. 2h, 7d) or ISO 8601"
+        until:
+          type: string
+          description: "Relative or ISO 8601"
+        min_importance:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        limit:
+          type: integer
+          maximum: 1000
+        order:
+          type: string
+          enum: [asc, desc]
+          default: desc
+
+    SearchResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Memory"
+        count:
+          type: integer
+        query_time_ms:
+          type: integer
+          format: int64
+
+    # ── Agent schemas ─────────────────────────
+
+    Agent:
+      type: object
+      required: [id, org_id, name, created_at]
+      properties:
+        id:
+          type: string
+          example: agent_abc123
+        org_id:
+          type: string
+          example: org_default
+        name:
+          type: string
+          example: web_crawler
+        description:
+          type: string
+          example: Crawls product pages
+        config:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        last_active_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateAgentRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: web_crawler
+        description:
+          type: string
+          example: Crawls product pages
+        config:
+          type: object
+          additionalProperties: true
+
+    AgentStats:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        memory_count:
+          type: integer
+        memories_24h:
+          type: integer
+        errors_24h:
+          type: integer
+        session_count:
+          type: integer
+        active_sessions:
+          type: integer
+        last_active_at:
+          type: string
+          format: date-time
+          nullable: true
+        memory_types:
+          type: object
+          additionalProperties:
+            type: integer
+          example: { "episodic": 800, "decision": 300, "entity": 150 }
+
+    # ── Session schemas ───────────────────────
+
+    Session:
+      type: object
+      required: [id, org_id, agent_id, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          example: sess_xyz789
+        org_id:
+          type: string
+          example: org_default
+        agent_id:
+          type: string
+          example: agent_abc123
+        status:
+          type: string
+          enum: [active, closed]
+          example: active
+        metadata:
+          type: object
+          additionalProperties: true
+          example: { "task": "product_research" }
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateSessionRequest:
+      type: object
+      required: [agent_id]
+      properties:
+        agent_id:
+          type: string
+          example: agent_abc123
+        metadata:
+          type: object
+          additionalProperties: true
+          example: { "task": "product_research" }
+
+    UpdateSessionRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, closed]
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ContextOptions:
+      type: object
+      properties:
+        max_tokens:
+          type: integer
+          description: Approximate max token budget for context
+        include_types:
+          type: array
+          items:
+            type: string
+            enum: [episodic, session, decision, entity]
+        since:
+          type: string
+          description: "Relative (e.g. 4h) or ISO 8601. Default: 24h"
+
+    SessionContext:
+      type: object
+      properties:
+        session_id:
+          type: string
+          example: sess_xyz789
+        context:
+          type: string
+          description: Markdown-formatted LLM-ready context
+          example: "## Session Context (sess_xyz789)\n\n### Recent Actions (3)\n- [2026-02-08T14:22:10Z] page_crawled: Crawled https://example.com...\n"
+        memory_count:
+          type: integer
+          example: 3
