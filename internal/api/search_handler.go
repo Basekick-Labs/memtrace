@@ -4,16 +4,21 @@ import (
 	"github.com/Basekick-Labs/memtrace/internal/auth"
 	"github.com/Basekick-Labs/memtrace/internal/memory"
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog"
 )
 
 // SearchHandler handles search endpoints
 type SearchHandler struct {
 	manager *memory.Manager
+	logger  zerolog.Logger
 }
 
 // NewSearchHandler creates a new search handler
-func NewSearchHandler(manager *memory.Manager) *SearchHandler {
-	return &SearchHandler{manager: manager}
+func NewSearchHandler(manager *memory.Manager, logger zerolog.Logger) *SearchHandler {
+	return &SearchHandler{
+		manager: manager,
+		logger:  logger.With().Str("component", "search-handler").Logger(),
+	}
 }
 
 // RegisterRoutes registers search routes
@@ -37,6 +42,12 @@ func (h *SearchHandler) handleSearch(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+
+	h.logger.Info().
+		Str("org_id", orgID).
+		Str("agent_id", query.AgentID).
+		Int("count", result.Count).
+		Msg("Memory search")
 
 	return c.JSON(result)
 }
