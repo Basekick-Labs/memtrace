@@ -63,6 +63,7 @@ func (h *MemoryHandler) handleCreate(c *fiber.Ctx) error {
 				"error": "duplicate memory",
 			})
 		}
+		h.logger.Warn().Str("org_id", orgID).Str("agent_id", req.AgentID).Err(err).Msg("Memory create rejected")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
