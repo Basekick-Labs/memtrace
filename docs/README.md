@@ -256,6 +256,30 @@ result = await Runner.run(agent, "Hello", session=session)
 
 4 tools: `memtrace_remember`, `memtrace_recall`, `memtrace_search`, `memtrace_decide`. See the [OpenAI Agents integration README](../integrations/openai-agents/README.md) for full docs.
 
+## Examples
+
+### Claude API + Memtrace
+
+Complete cookbook showing the core memory loop with the Anthropic Claude API:
+
+```python
+from memtrace import Memtrace, ContextOptions
+
+mt = Memtrace("http://localhost:9100", "mtk_...")
+
+# Get LLM-ready context and inject into Claude's system prompt
+ctx = mt.get_session_context(session_id, ContextOptions(since="4h"))
+
+response = anthropic.messages.create(
+    model="claude-sonnet-4-20250514",
+    system=f"You are an agent.\n\n{ctx.context}",
+    tools=MEMTRACE_TOOLS,  # remember, recall, search, decide
+    messages=[...],
+)
+```
+
+Two runnable scripts: single-agent memory loop and multi-agent shared memory. See the [Claude cookbook](../examples/claude/) for full examples.
+
 ## Documentation
 
 - [Architecture](./architecture.md) — How Memtrace works under the hood
