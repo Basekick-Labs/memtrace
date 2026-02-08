@@ -108,6 +108,7 @@ memtrace/
 │   ├── metadata/          # SQLite metadata store
 │   └── sanitize/          # Input validation + SQL escaping
 ├── pkg/sdk/               # Go SDK (public)
+├── sdks/python/           # Python SDK (PyPI: memtrace-sdk)
 ├── memtrace.toml          # Default config
 ├── Dockerfile
 └── Makefile
