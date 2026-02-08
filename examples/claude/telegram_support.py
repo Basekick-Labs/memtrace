@@ -567,18 +567,11 @@ def register_agent(mt: Memtrace, name: str, description: str) -> str:
 
 
 def find_active_session(mt: Memtrace, agent_id: str, account_id: str) -> str | None:
-    """Find an active session for a customer by account_id in session metadata.
-    Searches across all agents' sessions to find one matching this customer."""
-    resp = mt._client.get("/api/v1/sessions", params={"agent_id": agent_id})
-    if resp.status_code != 200:
-        return None
-    data = resp.json()
-    for s in data.get("sessions", []):
-        if (
-            s.get("status") == "active"
-            and s.get("metadata", {}).get("account_id") == account_id
-        ):
-            return s["id"]
+    """Find an active session for a customer by account_id in session metadata."""
+    result = mt.list_sessions(agent_id=agent_id)
+    for s in result.sessions:
+        if s.status == "active" and (s.metadata or {}).get("account_id") == account_id:
+            return s.id
     return None
 
 

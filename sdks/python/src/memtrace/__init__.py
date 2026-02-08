@@ -18,6 +18,7 @@ from .models import (
     SearchResult,
     Session,
     SessionContext,
+    SessionList,
 )
 
 __all__ = [
@@ -44,4 +45,5 @@ __all__ = [
     "SearchResult",
     "Session",
     "SessionContext",
+    "SessionList",
 ]

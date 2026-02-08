@@ -142,6 +142,13 @@ class Session(BaseModel):
     closed_at: datetime | None = None
 
 
+class SessionList(BaseModel):
+    """Response for listing sessions."""
+
+    sessions: list[Session]
+    count: int
+
+
 class CreateSessionRequest(BaseModel):
     """Request body for creating a session."""
 
