@@ -244,17 +244,17 @@ func (c *Client) writeColumnar(ctx context.Context, records []map[string]interfa
 	return nil
 }
 
-// QueryResponse represents a query result from Arc
-type QueryResponse struct {
-	Columns []string                 `json:"columns"`
-	Types   []string                 `json:"types"`
-	Data    []map[string]interface{} `json:"data"`
+// queryResponse represents a query result from Arc.
+// Arc returns columns as a string array and data as an array of arrays (rows of values).
+type queryResponse struct {
+	Columns []string        `json:"columns"`
+	Data    [][]interface{} `json:"data"`
 }
 
-// Query executes a SQL query against Arc and returns the results
+// Query executes a SQL query against Arc and returns the results as maps keyed by column name.
 func (c *Client) Query(ctx context.Context, sql string) ([]map[string]interface{}, error) {
 	payload := map[string]string{
-		"q": sql,
+		"sql": sql,
 	}
 
 	data, err := json.Marshal(payload)
@@ -288,17 +288,24 @@ func (c *Client) Query(ctx context.Context, sql string) ([]map[string]interface{
 		return nil, fmt.Errorf("Arc query failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	var result QueryResponse
+	var result queryResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		// Try as array of maps (some Arc response formats)
-		var rows []map[string]interface{}
-		if err2 := json.Unmarshal(body, &rows); err2 != nil {
-			return nil, fmt.Errorf("failed to parse response: %w (body: %s)", err, string(body))
-		}
-		return rows, nil
+		return nil, fmt.Errorf("failed to parse response: %w (body: %s)", err, string(body))
 	}
 
-	return result.Data, nil
+	// Zip columns with row values to produce maps
+	rows := make([]map[string]interface{}, 0, len(result.Data))
+	for _, row := range result.Data {
+		m := make(map[string]interface{}, len(result.Columns))
+		for i, col := range result.Columns {
+			if i < len(row) {
+				m[col] = row[i]
+			}
+		}
+		rows = append(rows, m)
+	}
+
+	return rows, nil
 }
 
 // Ping checks connectivity to Arc
