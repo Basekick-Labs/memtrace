@@ -109,6 +109,7 @@ memtrace/
 │   └── sanitize/          # Input validation + SQL escaping
 ├── pkg/sdk/               # Go SDK (public)
 ├── sdks/python/           # Python SDK (PyPI: memtrace-sdk)
+├── sdks/typescript/       # TypeScript SDK (npm: @memtrace/sdk)
 ├── memtrace.toml          # Default config
 ├── Dockerfile
 └── Makefile
