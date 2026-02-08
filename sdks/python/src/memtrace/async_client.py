@@ -19,6 +19,7 @@ from .models import (
     SearchResult,
     Session,
     SessionContext,
+    SessionList,
 )
 
 
@@ -161,6 +162,15 @@ class AsyncMemtrace:
         )
         handle_error(resp)
         return SessionContext.model_validate(resp.json())
+
+    async def list_sessions(self, agent_id: str | None = None) -> SessionList:
+        """List sessions, optionally filtered by agent."""
+        params = {}
+        if agent_id:
+            params["agent_id"] = agent_id
+        resp = await self._client.get("/api/v1/sessions", params=params)
+        handle_error(resp)
+        return SessionList.model_validate(resp.json())
 
     async def close_session(self, session_id: str) -> Session:
         """Close a session."""

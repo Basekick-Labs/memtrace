@@ -224,6 +224,38 @@ class TestGetSessionContext:
         assert ctx.session_id == "sess_1"
 
 
+class TestListSessions:
+    def test_list_all(self, client, mock_api):
+        mock_api.get("/api/v1/sessions").mock(
+            return_value=httpx.Response(
+                200, json={"sessions": [SESSION_JSON], "count": 1}
+            )
+        )
+        result = client.list_sessions()
+        assert result.count == 1
+        assert result.sessions[0].id == "sess_1"
+
+    def test_list_with_agent_id(self, client, mock_api):
+        route = mock_api.get("/api/v1/sessions").mock(
+            return_value=httpx.Response(
+                200, json={"sessions": [], "count": 0}
+            )
+        )
+        client.list_sessions(agent_id="agent_1")
+        url = str(route.calls[0].request.url)
+        assert "agent_id=agent_1" in url
+
+    def test_list_empty(self, client, mock_api):
+        mock_api.get("/api/v1/sessions").mock(
+            return_value=httpx.Response(
+                200, json={"sessions": [], "count": 0}
+            )
+        )
+        result = client.list_sessions()
+        assert result.count == 0
+        assert result.sessions == []
+
+
 class TestCloseSession:
     def test_close(self, client, mock_api):
         closed = {**SESSION_JSON, "status": "closed", "closed_at": "2026-02-08T13:00:00Z"}
