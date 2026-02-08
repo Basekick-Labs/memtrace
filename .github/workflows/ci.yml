@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install CGO dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc libc6-dev
+
+      - name: Download modules
+        run: go mod download && go mod verify
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Format check
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Files not formatted:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Build
+        run: CGO_ENABLED=1 go build ./cmd/... ./internal/... ./pkg/...
+
+      - name: Test
+        run: go test ./internal/... ./pkg/... -v
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: memtrace:ci
