@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -29,12 +31,22 @@ type Client struct {
 	flushInterval time.Duration
 	buffer        []map[string]interface{}
 	bufferMu      sync.Mutex
+	flushMu       sync.Mutex
+	maxBufferSize int
 	flushTicker   *time.Ticker
 	stopCh        chan struct{}
+	closeOnce     sync.Once
+
+	// Health monitoring
+	connectTimeout time.Duration
+	connected      atomic.Bool
+	healthTicker   *time.Ticker
 }
 
 // NewClient creates a new Arc HTTP client
 func NewClient(baseURL, apiKey, database, measurement string, batchSize int, flushIntervalMS int, connectTimeout int, queryTimeout int, logger zerolog.Logger) *Client {
+	connTimeout := time.Duration(connectTimeout) * time.Second
+
 	c := &Client{
 		baseURL:     baseURL,
 		apiKey:      apiKey,
@@ -43,26 +55,37 @@ func NewClient(baseURL, apiKey, database, measurement string, batchSize int, flu
 		httpClient: &http.Client{
 			Timeout: time.Duration(queryTimeout) * time.Second,
 			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout: connTimeout,
+				}).DialContext,
+				TLSHandshakeTimeout: connTimeout,
 				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		logger:        logger.With().Str("component", "arc-client").Logger(),
-		batchSize:     batchSize,
-		flushInterval: time.Duration(flushIntervalMS) * time.Millisecond,
-		buffer:        make([]map[string]interface{}, 0, batchSize),
-		stopCh:        make(chan struct{}),
+		logger:         logger.With().Str("component", "arc-client").Logger(),
+		batchSize:      batchSize,
+		flushInterval:  time.Duration(flushIntervalMS) * time.Millisecond,
+		buffer:         make([]map[string]interface{}, 0, batchSize),
+		maxBufferSize:  batchSize * 100,
+		stopCh:         make(chan struct{}),
+		connectTimeout: connTimeout,
 	}
 
 	// Start background flush
 	c.flushTicker = time.NewTicker(c.flushInterval)
 	go c.backgroundFlush()
 
+	// Start background health check
+	c.healthTicker = time.NewTicker(connTimeout)
+	go c.backgroundHealthCheck()
+
 	c.logger.Info().
 		Str("url", baseURL).
 		Str("database", database).
 		Int("batch_size", batchSize).
 		Int("flush_interval_ms", flushIntervalMS).
+		Int("max_buffer_size", c.maxBufferSize).
 		Msg("Arc client initialized")
 
 	return c
@@ -81,10 +104,38 @@ func (c *Client) backgroundFlush() {
 	}
 }
 
+func (c *Client) backgroundHealthCheck() {
+	for {
+		select {
+		case <-c.healthTicker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), c.connectTimeout)
+			err := c.Ping(ctx)
+			cancel()
+
+			wasConnected := c.connected.Load()
+			if err != nil && wasConnected {
+				c.connected.Store(false)
+				c.logger.Warn().Err(err).Msg("Arc connection lost")
+			} else if err == nil && !wasConnected {
+				c.connected.Store(true)
+				c.logger.Info().Msg("Arc connection restored")
+			}
+		case <-c.stopCh:
+			return
+		}
+	}
+}
+
 // BufferWrite adds a record to the write buffer. Flushes when batch size is reached.
+// If the buffer exceeds maxBufferSize, the oldest records are dropped.
 func (c *Client) BufferWrite(record map[string]interface{}) error {
 	c.bufferMu.Lock()
 	c.buffer = append(c.buffer, record)
+	if len(c.buffer) > c.maxBufferSize {
+		dropped := len(c.buffer) - c.maxBufferSize
+		c.buffer = c.buffer[dropped:]
+		c.logger.Warn().Int("dropped", dropped).Msg("Buffer overflow, dropped oldest records")
+	}
 	shouldFlush := len(c.buffer) >= c.batchSize
 	c.bufferMu.Unlock()
 
@@ -94,8 +145,13 @@ func (c *Client) BufferWrite(record map[string]interface{}) error {
 	return nil
 }
 
-// Flush writes all buffered records to Arc using columnar msgpack format
+// Flush writes all buffered records to Arc using columnar msgpack format.
+// On failure, records are re-buffered so they can be retried on the next cycle.
+// Serialized via flushMu to prevent concurrent flush races.
 func (c *Client) Flush(ctx context.Context) error {
+	c.flushMu.Lock()
+	defer c.flushMu.Unlock()
+
 	c.bufferMu.Lock()
 	if len(c.buffer) == 0 {
 		c.bufferMu.Unlock()
@@ -105,7 +161,24 @@ func (c *Client) Flush(ctx context.Context) error {
 	c.buffer = make([]map[string]interface{}, 0, c.batchSize)
 	c.bufferMu.Unlock()
 
-	return c.writeColumnar(ctx, records)
+	if err := c.writeColumnar(ctx, records); err != nil {
+		// Re-buffer: prepend failed records before any new ones
+		c.bufferMu.Lock()
+		combined := make([]map[string]interface{}, 0, len(records)+len(c.buffer))
+		combined = append(combined, records...)
+		combined = append(combined, c.buffer...)
+		if len(combined) > c.maxBufferSize {
+			dropped := len(combined) - c.maxBufferSize
+			combined = combined[dropped:]
+			c.logger.Warn().Int("dropped", dropped).Msg("Buffer overflow, dropped oldest records")
+		}
+		c.buffer = combined
+		c.bufferMu.Unlock()
+		return err
+	}
+
+	c.logger.Debug().Int("records", len(records)).Msg("Flushed records to Arc")
+	return nil
 }
 
 // writeColumnar converts row records to columnar format and writes to Arc
@@ -168,7 +241,6 @@ func (c *Client) writeColumnar(ctx context.Context, records []map[string]interfa
 		return fmt.Errorf("Arc write failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	c.logger.Debug().Int("records", len(records)).Msg("Flushed records to Arc")
 	return nil
 }
 
@@ -241,6 +313,7 @@ func (c *Client) Ping(ctx context.Context) error {
 		return fmt.Errorf("failed to ping Arc: %w", err)
 	}
 	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body) //nolint:errcheck // drain for connection reuse
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("Arc health check failed (status %d)", resp.StatusCode)
@@ -249,9 +322,25 @@ func (c *Client) Ping(ctx context.Context) error {
 	return nil
 }
 
-// Close stops the background flush and flushes remaining records
+// IsConnected returns the last known connection state from the background health check.
+func (c *Client) IsConnected() bool {
+	return c.connected.Load()
+}
+
+// MarkConnected sets the connection state to true. Called after a successful startup Ping.
+func (c *Client) MarkConnected() {
+	c.connected.Store(true)
+}
+
+// Close stops the background flush and health check, then flushes remaining records.
+// Safe to call multiple times.
 func (c *Client) Close() error {
-	close(c.stopCh)
-	c.flushTicker.Stop()
-	return c.Flush(context.Background())
+	var flushErr error
+	c.closeOnce.Do(func() {
+		close(c.stopCh)
+		c.flushTicker.Stop()
+		c.healthTicker.Stop()
+		flushErr = c.Flush(context.Background())
+	})
+	return flushErr
 }
