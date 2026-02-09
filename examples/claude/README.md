@@ -137,4 +137,4 @@ Both examples provide 4 Memtrace tools to Claude:
 | `memtrace_search` | Search with filters (content, tags, types, importance) |
 | `memtrace_decide` | Log a decision with reasoning (audit trail) |
 
-These match the tools available in the [MCP server](../../docs/mcp.md) and the [OpenAI Agents integration](../../integrations/openai-agents/).
+These match the tools available in the [MCP server](../../docs/mcp.md), the [OpenAI API cookbook](../openai/), and the [OpenAI Agents integration](../../integrations/openai-agents/).

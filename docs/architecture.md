@@ -112,6 +112,7 @@ memtrace/
 ├── sdks/typescript/       # TypeScript SDK (npm: @memtrace/sdk)
 ├── integrations/openai-agents/  # OpenAI Agents SDK integration
 ├── examples/claude/       # Claude API cookbook (single + multi-agent)
+├── examples/openai/       # OpenAI API cookbook (single + multi-agent)
 ├── memtrace.toml          # Default config
 ├── Dockerfile
 └── Makefile

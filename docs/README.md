@@ -280,6 +280,31 @@ response = anthropic.messages.create(
 
 Two runnable scripts: single-agent memory loop and multi-agent shared memory. See the [Claude cookbook](../examples/claude/) for full examples.
 
+### OpenAI API + Memtrace
+
+The same cookbook pattern using the OpenAI Python SDK and function calling:
+
+```python
+from openai import OpenAI
+from memtrace import Memtrace, ContextOptions
+
+mt = Memtrace("http://localhost:9100", "mtk_...")
+
+# Get LLM-ready context and inject into the system prompt
+ctx = mt.get_session_context(session_id, ContextOptions(since="4h"))
+
+response = openai.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": f"You are an agent.\n\n{ctx.context}"},
+        ...
+    ],
+    tools=MEMTRACE_TOOLS,  # remember, recall, search, decide
+)
+```
+
+Two runnable scripts: single-agent memory loop and multi-agent shared memory. See the [OpenAI cookbook](../examples/openai/) for full examples.
+
 ## Documentation
 
 - [Architecture](./architecture.md) — How Memtrace works under the hood
