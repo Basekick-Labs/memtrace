@@ -1,0 +1,2 @@
+openai>=1.0.0
+memtrace-sdk>=0.1.0

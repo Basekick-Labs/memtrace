@@ -14,6 +14,22 @@ AI agents need memory to be useful. They need to remember what they did, what wo
 
 Memtrace takes a different approach: **operational, temporal memory** built on a time-series database. Every action is temporal. Every query is time-windowed. The feedback loop — Memory, Decision, Action, Log, Repeat — works naturally with time-series data.
 
+## How It Works
+
+Memtrace stores memories as time-series events in [Arc](https://github.com/Basekick-Labs/arc), a high-performance time-series database. Each memory has a type (`episodic`, `decision`, `entity`, `session`), tags, importance score, and metadata. Queries are time-windowed by default — "what happened in the last 2 hours?" is a first-class operation.
+
+The **session context** endpoint is the killer feature: it queries memories for a session, groups them by type, and returns LLM-ready markdown that you inject directly into any prompt. No parsing, no transformation — just paste it into your system prompt.
+
+Read the full [Architecture](./architecture.md) doc for details on the data model, deduplication, write batching, and shared memory.
+
+## Documentation
+
+- [Architecture](./architecture.md) — How Memtrace works under the hood
+- [API Reference](./api.md) — Complete REST API documentation
+- [Configuration](./configuration.md) — All config options, environment variables, and deployment
+- [MCP Server](./mcp.md) — Model Context Protocol server for Claude Code, Cursor, and more
+- [OpenAPI Spec](./openapi.yaml) — OpenAPI 3.0 specification for all REST endpoints
+
 ## Use Cases
 
 ### Autonomous Agents
@@ -280,21 +296,30 @@ response = anthropic.messages.create(
 
 Two runnable scripts: single-agent memory loop and multi-agent shared memory. See the [Claude cookbook](../examples/claude/) for full examples.
 
-## Documentation
+### OpenAI API + Memtrace
 
-- [Architecture](./architecture.md) — How Memtrace works under the hood
-- [API Reference](./api.md) — Complete REST API documentation
-- [Configuration](./configuration.md) — All config options, environment variables, and deployment
-- [MCP Server](./mcp.md) — Model Context Protocol server for Claude Code, Cursor, and more
-- [OpenAPI Spec](./openapi.yaml) — OpenAPI 3.0 specification for all REST endpoints
+The same cookbook pattern using the OpenAI Python SDK and function calling:
 
-## How It Works
+```python
+from openai import OpenAI
+from memtrace import Memtrace, ContextOptions
 
-Memtrace stores memories as time-series events in [Arc](https://github.com/Basekick-Labs/arc), a high-performance time-series database. Each memory has a type (`episodic`, `decision`, `entity`, `session`), tags, importance score, and metadata. Queries are time-windowed by default — "what happened in the last 2 hours?" is a first-class operation.
+mt = Memtrace("http://localhost:9100", "mtk_...")
 
-The **session context** endpoint is the killer feature: it queries memories for a session, groups them by type, and returns LLM-ready markdown that you inject directly into any prompt. No parsing, no transformation — just paste it into your system prompt.
+# Get LLM-ready context and inject into the system prompt
+ctx = mt.get_session_context(session_id, ContextOptions(since="4h"))
 
-Read the full [Architecture](./architecture.md) doc for details on the data model, deduplication, write batching, and shared memory.
+response = openai.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": f"You are an agent.\n\n{ctx.context}"},
+        ...
+    ],
+    tools=MEMTRACE_TOOLS,  # remember, recall, search, decide
+)
+```
+
+Two runnable scripts: single-agent memory loop and multi-agent shared memory. See the [OpenAI cookbook](../examples/openai/) for full examples.
 
 ## License
 
