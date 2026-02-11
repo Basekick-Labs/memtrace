@@ -5,7 +5,7 @@ services:
     volumes:
       - memtrace-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9100/health"]
       interval: 30s
       timeout: 10s
       retries: 3
