@@ -1,0 +1,35 @@
+services:
+  memtrace:
+    build: .
+    container_name: memtrace
+    volumes:
+      - memtrace-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - traefik
+    environment:
+      - MEMTRACE_ARC_URL=http://arc:8000
+      - MEMTRACE_ARC_API_KEY=${ARC_API_KEY:-}
+      - MEMTRACE_AUTH_ENABLED=true
+      - MEMTRACE_LOG_FORMAT=json
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memtrace.rule=Host(`memtrace.basekick.net`)"
+      - "traefik.http.routers.memtrace.entrypoints=https"
+      - "traefik.http.routers.memtrace.tls.certresolver=letsencrypt"
+      - "traefik.http.services.memtrace.loadbalancer.server.port=9100"
+      - "traefik.docker.network=traefik"
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  memtrace-data:
+    driver: local
