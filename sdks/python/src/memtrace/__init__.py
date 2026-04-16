@@ -7,6 +7,7 @@ from .exceptions import AuthenticationError, ConflictError, MemtraceError, NotFo
 from .models import (
     AddMemoryRequest,
     Agent,
+    AgentList,
     AgentStats,
     ContextOptions,
     CreateSessionRequest,
@@ -34,6 +35,7 @@ __all__ = [
     # Models
     "AddMemoryRequest",
     "Agent",
+    "AgentList",
     "AgentStats",
     "ContextOptions",
     "CreateSessionRequest",

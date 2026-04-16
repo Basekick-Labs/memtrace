@@ -187,6 +187,60 @@ class TestGetAgentStats:
         assert stats.memory_types["episodic"] == 30
 
 
+class TestListAgents:
+    def test_list_agents(self, client, mock_api):
+        mock_api.get("/api/v1/agents").mock(
+            return_value=httpx.Response(200, json={"agents": [AGENT_JSON], "count": 1})
+        )
+        result = client.list_agents()
+        assert result.count == 1
+        assert result.agents[0].id == "agent_1"
+
+    def test_list_agents_empty(self, client, mock_api):
+        mock_api.get("/api/v1/agents").mock(
+            return_value=httpx.Response(200, json={"agents": [], "count": 0})
+        )
+        result = client.list_agents()
+        assert result.count == 0
+        assert result.agents == []
+
+
+class TestGetAgentMemories:
+    def test_get_agent_memories(self, client, mock_api):
+        mock_api.get("/api/v1/agents/agent_1/memories").mock(
+            return_value=httpx.Response(
+                200, json={"memories": [MEMORY_JSON], "count": 1, "has_more": False}
+            )
+        )
+        result = client.get_agent_memories("agent_1")
+        assert result.count == 1
+
+    def test_get_agent_memories_with_opts(self, client, mock_api):
+        route = mock_api.get("/api/v1/agents/agent_1/memories").mock(
+            return_value=httpx.Response(
+                200, json={"memories": [], "count": 0, "has_more": False}
+            )
+        )
+        client.get_agent_memories(
+            "agent_1", ListOptions(limit=10, since="2h", order="desc")
+        )
+        url = str(route.calls[0].request.url)
+        assert "limit=10" in url
+        assert "since=2h" in url
+        assert "order=desc" in url
+        # agent_id must not be duplicated in query params
+        assert "agent_id=" not in url
+
+
+class TestDeleteAgent:
+    def test_delete(self, client, mock_api):
+        mock_api.delete("/api/v1/agents/agent_1").mock(
+            return_value=httpx.Response(204)
+        )
+        result = client.delete_agent("agent_1")
+        assert result is None
+
+
 # --- Sessions ---
 
 
@@ -254,6 +308,18 @@ class TestListSessions:
         result = client.list_sessions()
         assert result.count == 0
         assert result.sessions == []
+
+
+class TestGetSessionMemories:
+    def test_get_session_memories(self, client, mock_api):
+        mock_api.get("/api/v1/sessions/sess_1/memories").mock(
+            return_value=httpx.Response(
+                200, json={"memories": [MEMORY_JSON], "count": 1, "has_more": False}
+            )
+        )
+        result = client.get_session_memories("sess_1")
+        assert result.count == 1
+        assert result.memories[0].session_id == "sess_1"
 
 
 class TestCloseSession:
@@ -328,6 +394,34 @@ class TestContextManager:
         with Memtrace(BASE_URL, API_KEY) as client:
             agent = client.get_agent("agent_1")
             assert agent.id == "agent_1"
+
+
+# --- Path escaping ---
+
+
+class TestPathEscaping:
+    """Path params with URL-unsafe characters must be percent-encoded."""
+
+    def test_agent_id_with_slash_is_escaped(self, client, mock_api):
+        # Register the escaped path explicitly; if the SDK sent an unescaped
+        # "agents/../../etc" it would hit a different route (or no route) and
+        # respx would raise.
+        mock_api.get("/api/v1/agents/a%2Fb%2Fc").mock(
+            return_value=httpx.Response(200, json=AGENT_JSON)
+        )
+        client.get_agent("a/b/c")
+
+    def test_session_id_with_space_is_escaped(self, client, mock_api):
+        mock_api.get("/api/v1/sessions/sess%20with%20space").mock(
+            return_value=httpx.Response(200, json=SESSION_JSON)
+        )
+        client.get_session("sess with space")
+
+    def test_agent_id_with_traversal_is_escaped(self, client, mock_api):
+        mock_api.get("/api/v1/agents/..%2Fadmin").mock(
+            return_value=httpx.Response(200, json=AGENT_JSON)
+        )
+        client.get_agent("../admin")
 
 
 # --- Headers ---

@@ -157,6 +157,36 @@ class TestGetAgentStats:
         assert stats.memory_count == 42
 
 
+class TestListAgents:
+    async def test_list_agents(self, client, mock_api):
+        mock_api.get("/api/v1/agents").mock(
+            return_value=httpx.Response(200, json={"agents": [AGENT_JSON], "count": 1})
+        )
+        result = await client.list_agents()
+        assert result.count == 1
+        assert result.agents[0].id == "agent_1"
+
+
+class TestGetAgentMemories:
+    async def test_get_agent_memories(self, client, mock_api):
+        mock_api.get("/api/v1/agents/agent_1/memories").mock(
+            return_value=httpx.Response(
+                200, json={"memories": [MEMORY_JSON], "count": 1, "has_more": False}
+            )
+        )
+        result = await client.get_agent_memories("agent_1")
+        assert result.count == 1
+
+
+class TestDeleteAgent:
+    async def test_delete(self, client, mock_api):
+        mock_api.delete("/api/v1/agents/agent_1").mock(
+            return_value=httpx.Response(204)
+        )
+        result = await client.delete_agent("agent_1")
+        assert result is None
+
+
 # --- Sessions ---
 
 
@@ -214,6 +244,31 @@ class TestListSessions:
         await client.list_sessions(agent_id="agent_1")
         url = str(route.calls[0].request.url)
         assert "agent_id=agent_1" in url
+
+
+class TestGetSessionMemories:
+    async def test_get_session_memories(self, client, mock_api):
+        mock_api.get("/api/v1/sessions/sess_1/memories").mock(
+            return_value=httpx.Response(
+                200, json={"memories": [MEMORY_JSON], "count": 1, "has_more": False}
+            )
+        )
+        result = await client.get_session_memories("sess_1")
+        assert result.count == 1
+
+
+class TestAsyncPathEscaping:
+    async def test_agent_id_with_slash_is_escaped(self, client, mock_api):
+        mock_api.get("/api/v1/agents/a%2Fb").mock(
+            return_value=httpx.Response(200, json=AGENT_JSON)
+        )
+        await client.get_agent("a/b")
+
+    async def test_session_id_with_space_is_escaped(self, client, mock_api):
+        mock_api.get("/api/v1/sessions/sess%20x").mock(
+            return_value=httpx.Response(200, json=SESSION_JSON)
+        )
+        await client.get_session("sess x")
 
 
 class TestCloseSession:

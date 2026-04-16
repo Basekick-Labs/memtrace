@@ -12,6 +12,7 @@ license = {text = "MIT"}
 authors = [
     { name = "Basekick Labs" },
 ]
+keywords = ["memtrace", "ai", "agents", "memory", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -37,9 +38,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://memtrace.ai"
+Homepage = "https://basekick.net/memtrace"
 Repository = "https://github.com/Basekick-Labs/memtrace"
 Documentation = "https://docs.basekick.net/memtrace"
+Issues = "https://github.com/Basekick-Labs/memtrace/issues"
+Changelog = "https://github.com/Basekick-Labs/memtrace/blob/main/sdks/python/CHANGELOG.md"
 
 [tool.hatch.version]
 path = "src/memtrace/_version.py"

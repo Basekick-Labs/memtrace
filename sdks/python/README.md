@@ -1,6 +1,6 @@
 # Memtrace Python SDK
 
-Python client for [Memtrace](https://memtrace.ai) — LLM-agnostic memory layer for AI agents.
+Python client for [Memtrace](https://basekick.net/memtrace) — LLM-agnostic memory layer for AI agents.
 
 ## Installation
 
@@ -95,6 +95,9 @@ agent = client.register_agent(RegisterAgentRequest(
     config={"model": "gpt-4"},
 ))
 
+# List all agents in the org
+agents = client.list_agents()
+
 # Get agent details
 agent = client.get_agent("agent_1")
 
@@ -102,6 +105,12 @@ agent = client.get_agent("agent_1")
 stats = client.get_agent_stats("agent_1")
 print(f"Total memories: {stats.memory_count}")
 print(f"Active sessions: {stats.active_sessions}")
+
+# Get recent memories for an agent
+memories = client.get_agent_memories("agent_1", ListOptions(limit=20, since="24h"))
+
+# Delete an agent (returns None; 404 raises NotFoundError)
+client.delete_agent("agent_1")
 ```
 
 ### Session Management
@@ -124,6 +133,13 @@ ctx = client.get_session_context(session.id, ContextOptions(
     max_tokens=4000,
 ))
 print(ctx.context)  # Markdown-formatted for LLM consumption
+
+# List sessions (optionally filtered by agent)
+all_sessions = client.list_sessions()
+for_agent = client.list_sessions(agent_id="agent_1")
+
+# Get memories for a session
+session_memories = client.get_session_memories(session.id)
 
 # Close the session
 client.close_session(session.id)

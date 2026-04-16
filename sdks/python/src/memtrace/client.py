@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 
 from ._base import DEFAULT_TIMEOUT, build_headers, handle_error
 from .models import (
     AddMemoryRequest,
     Agent,
+    AgentList,
     AgentStats,
     ContextOptions,
     CreateSessionRequest,
@@ -118,17 +121,41 @@ class Memtrace:
         handle_error(resp)
         return Agent.model_validate(resp.json())
 
+    def list_agents(self) -> AgentList:
+        """List all agents for the caller's org."""
+        resp = self._client.get("/api/v1/agents")
+        handle_error(resp)
+        return AgentList.model_validate(resp.json())
+
     def get_agent(self, agent_id: str) -> Agent:
         """Get an agent by ID."""
-        resp = self._client.get(f"/api/v1/agents/{agent_id}")
+        resp = self._client.get(f"/api/v1/agents/{quote(agent_id, safe='')}")
         handle_error(resp)
         return Agent.model_validate(resp.json())
 
     def get_agent_stats(self, agent_id: str) -> AgentStats:
         """Get memory stats for an agent."""
-        resp = self._client.get(f"/api/v1/agents/{agent_id}/stats")
+        resp = self._client.get(f"/api/v1/agents/{quote(agent_id, safe='')}/stats")
         handle_error(resp)
         return AgentStats.model_validate(resp.json())
+
+    def get_agent_memories(
+        self, agent_id: str, opts: ListOptions | None = None
+    ) -> MemoryList:
+        """Get recent memories for an agent."""
+        params = opts.model_dump(exclude_none=True) if opts else {}
+        # Server derives agent_id from the path; drop a conflicting value if set.
+        params.pop("agent_id", None)
+        resp = self._client.get(
+            f"/api/v1/agents/{quote(agent_id, safe='')}/memories", params=params
+        )
+        handle_error(resp)
+        return MemoryList.model_validate(resp.json())
+
+    def delete_agent(self, agent_id: str) -> None:
+        """Delete an agent."""
+        resp = self._client.delete(f"/api/v1/agents/{quote(agent_id, safe='')}")
+        handle_error(resp)
 
     # --- Sessions ---
 
@@ -140,7 +167,7 @@ class Memtrace:
 
     def get_session(self, session_id: str) -> Session:
         """Get a session by ID."""
-        resp = self._client.get(f"/api/v1/sessions/{session_id}")
+        resp = self._client.get(f"/api/v1/sessions/{quote(session_id, safe='')}")
         handle_error(resp)
         return Session.model_validate(resp.json())
 
@@ -149,9 +176,23 @@ class Memtrace:
     ) -> SessionContext:
         """Get LLM-formatted session context."""
         body = opts.model_dump(exclude_none=True) if opts else {}
-        resp = self._client.post(f"/api/v1/sessions/{session_id}/context", json=body)
+        resp = self._client.post(
+            f"/api/v1/sessions/{quote(session_id, safe='')}/context", json=body
+        )
         handle_error(resp)
         return SessionContext.model_validate(resp.json())
+
+    def get_session_memories(
+        self, session_id: str, opts: ListOptions | None = None
+    ) -> MemoryList:
+        """Get memories for a session."""
+        params = opts.model_dump(exclude_none=True) if opts else {}
+        params.pop("session_id", None)
+        resp = self._client.get(
+            f"/api/v1/sessions/{quote(session_id, safe='')}/memories", params=params
+        )
+        handle_error(resp)
+        return MemoryList.model_validate(resp.json())
 
     def list_sessions(self, agent_id: str | None = None) -> SessionList:
         """List sessions, optionally filtered by agent."""
@@ -164,6 +205,8 @@ class Memtrace:
 
     def close_session(self, session_id: str) -> Session:
         """Close a session."""
-        resp = self._client.put(f"/api/v1/sessions/{session_id}", json={"status": "closed"})
+        resp = self._client.put(
+            f"/api/v1/sessions/{quote(session_id, safe='')}", json={"status": "closed"}
+        )
         handle_error(resp)
         return Session.model_validate(resp.json())

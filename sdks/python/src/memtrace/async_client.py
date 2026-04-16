@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 
 from ._base import DEFAULT_TIMEOUT, build_headers, handle_error
 from .models import (
     AddMemoryRequest,
     Agent,
+    AgentList,
     AgentStats,
     ContextOptions,
     CreateSessionRequest,
@@ -124,17 +127,42 @@ class AsyncMemtrace:
         handle_error(resp)
         return Agent.model_validate(resp.json())
 
+    async def list_agents(self) -> AgentList:
+        """List all agents for the caller's org."""
+        resp = await self._client.get("/api/v1/agents")
+        handle_error(resp)
+        return AgentList.model_validate(resp.json())
+
     async def get_agent(self, agent_id: str) -> Agent:
         """Get an agent by ID."""
-        resp = await self._client.get(f"/api/v1/agents/{agent_id}")
+        resp = await self._client.get(f"/api/v1/agents/{quote(agent_id, safe='')}")
         handle_error(resp)
         return Agent.model_validate(resp.json())
 
     async def get_agent_stats(self, agent_id: str) -> AgentStats:
         """Get memory stats for an agent."""
-        resp = await self._client.get(f"/api/v1/agents/{agent_id}/stats")
+        resp = await self._client.get(
+            f"/api/v1/agents/{quote(agent_id, safe='')}/stats"
+        )
         handle_error(resp)
         return AgentStats.model_validate(resp.json())
+
+    async def get_agent_memories(
+        self, agent_id: str, opts: ListOptions | None = None
+    ) -> MemoryList:
+        """Get recent memories for an agent."""
+        params = opts.model_dump(exclude_none=True) if opts else {}
+        params.pop("agent_id", None)
+        resp = await self._client.get(
+            f"/api/v1/agents/{quote(agent_id, safe='')}/memories", params=params
+        )
+        handle_error(resp)
+        return MemoryList.model_validate(resp.json())
+
+    async def delete_agent(self, agent_id: str) -> None:
+        """Delete an agent."""
+        resp = await self._client.delete(f"/api/v1/agents/{quote(agent_id, safe='')}")
+        handle_error(resp)
 
     # --- Sessions ---
 
@@ -148,7 +176,7 @@ class AsyncMemtrace:
 
     async def get_session(self, session_id: str) -> Session:
         """Get a session by ID."""
-        resp = await self._client.get(f"/api/v1/sessions/{session_id}")
+        resp = await self._client.get(f"/api/v1/sessions/{quote(session_id, safe='')}")
         handle_error(resp)
         return Session.model_validate(resp.json())
 
@@ -158,10 +186,22 @@ class AsyncMemtrace:
         """Get LLM-formatted session context."""
         body = opts.model_dump(exclude_none=True) if opts else {}
         resp = await self._client.post(
-            f"/api/v1/sessions/{session_id}/context", json=body
+            f"/api/v1/sessions/{quote(session_id, safe='')}/context", json=body
         )
         handle_error(resp)
         return SessionContext.model_validate(resp.json())
+
+    async def get_session_memories(
+        self, session_id: str, opts: ListOptions | None = None
+    ) -> MemoryList:
+        """Get memories for a session."""
+        params = opts.model_dump(exclude_none=True) if opts else {}
+        params.pop("session_id", None)
+        resp = await self._client.get(
+            f"/api/v1/sessions/{quote(session_id, safe='')}/memories", params=params
+        )
+        handle_error(resp)
+        return MemoryList.model_validate(resp.json())
 
     async def list_sessions(self, agent_id: str | None = None) -> SessionList:
         """List sessions, optionally filtered by agent."""
@@ -175,7 +215,8 @@ class AsyncMemtrace:
     async def close_session(self, session_id: str) -> Session:
         """Close a session."""
         resp = await self._client.put(
-            f"/api/v1/sessions/{session_id}", json={"status": "closed"}
+            f"/api/v1/sessions/{quote(session_id, safe='')}",
+            json={"status": "closed"},
         )
         handle_error(resp)
         return Session.model_validate(resp.json())

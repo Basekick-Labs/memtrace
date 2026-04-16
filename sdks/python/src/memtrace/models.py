@@ -113,6 +113,13 @@ class RegisterAgentRequest(BaseModel):
     config: dict[str, Any] | None = None
 
 
+class AgentList(BaseModel):
+    """Response for listing agents."""
+
+    agents: list[Agent]
+    count: int
+
+
 class AgentStats(BaseModel):
     """Memory statistics for an agent."""
 
