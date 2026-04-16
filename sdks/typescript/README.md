@@ -1,6 +1,6 @@
 # Memtrace TypeScript SDK
 
-TypeScript/Node.js client for [Memtrace](https://memtrace.ai) — LLM-agnostic memory layer for AI agents.
+TypeScript/Node.js client for [Memtrace](https://basekick.net/memtrace) — LLM-agnostic memory layer for AI agents.
 
 ## Installation
 
