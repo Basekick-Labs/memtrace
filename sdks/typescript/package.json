@@ -1,5 +1,5 @@
 {
-  "name": "@memtrace/sdk",
+  "name": "@basekick-labs/memtrace-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for Memtrace — LLM-agnostic memory layer for AI agents",
   "license": "MIT",
@@ -21,7 +21,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=18"
@@ -45,6 +46,12 @@
     "directory": "sdks/typescript"
   },
   "homepage": "https://memtrace.ai",
+  "bugs": {
+    "url": "https://github.com/Basekick-Labs/memtrace/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "memtrace",
     "ai",

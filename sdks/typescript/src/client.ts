@@ -15,6 +15,7 @@ import type {
   RegisterAgentRequest,
   AgentStats,
   Session,
+  SessionList,
   CreateSessionRequest,
   ContextOptions,
   SessionContext,
@@ -32,7 +33,7 @@ export interface MemtraceOptions {
  *
  * @example
  * ```typescript
- * import { Memtrace } from '@memtrace/sdk'
+ * import { Memtrace } from '@basekick-labs/memtrace-sdk'
  *
  * const client = new Memtrace('http://localhost:9100', 'mtk_...')
  * await client.remember('agent_1', 'User prefers dark mode')
@@ -154,6 +155,12 @@ export class Memtrace {
   /** Get a session by ID. */
   async getSession(id: string): Promise<Session> {
     return this.get<Session>(`/api/v1/sessions/${encodeURIComponent(id)}`);
+  }
+
+  /** List sessions, optionally filtered by agent. */
+  async listSessions(agentId?: string): Promise<SessionList> {
+    const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+    return this.get<SessionList>(`/api/v1/sessions${qs}`);
   }
 
   /** Get LLM-formatted session context. */

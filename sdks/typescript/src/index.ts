@@ -20,6 +20,7 @@ export type {
   RegisterAgentRequest,
   AgentStats,
   Session,
+  SessionList,
   CreateSessionRequest,
   ContextOptions,
   SessionContext,

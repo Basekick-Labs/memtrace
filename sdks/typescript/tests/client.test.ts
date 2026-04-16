@@ -227,6 +227,30 @@ describe("getSessionContext", () => {
   });
 });
 
+describe("listSessions", () => {
+  it("lists all sessions without filter", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(200, { sessions: [SESSION_JSON], count: 1 }),
+    );
+    const result = await client.listSessions();
+    expect(result.count).toBe(1);
+    expect(result.sessions[0].id).toBe("sess_1");
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE_URL}/api/v1/sessions`);
+  });
+
+  it("encodes agent_id into query string when filtered", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(200, { sessions: [], count: 0 }),
+    );
+    await client.listSessions("agent with spaces");
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      `${BASE_URL}/api/v1/sessions?agent_id=agent%20with%20spaces`,
+    );
+  });
+});
+
 describe("closeSession", () => {
   it("closes a session", async () => {
     const closed = {

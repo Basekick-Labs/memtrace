@@ -122,6 +122,12 @@ export interface Session {
   closed_at?: string;
 }
 
+/** Response for listing sessions. */
+export interface SessionList {
+  sessions: Session[];
+  count: number;
+}
+
 /** Request body for creating a session. */
 export interface CreateSessionRequest {
   agent_id: string;

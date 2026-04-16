@@ -5,13 +5,13 @@ TypeScript/Node.js client for [Memtrace](https://memtrace.ai) — LLM-agnostic m
 ## Installation
 
 ```bash
-npm install @memtrace/sdk
+npm install @basekick-labs/memtrace-sdk
 ```
 
 ## Quick Start
 
 ```typescript
-import { Memtrace } from '@memtrace/sdk'
+import { Memtrace } from '@basekick-labs/memtrace-sdk'
 
 const client = new Memtrace('http://localhost:9100', 'mtk_your_api_key')
 
@@ -33,7 +33,7 @@ await client.decide('agent_1', 'Use PostgreSQL', 'Better JSON support for metada
 ### Memory Operations
 
 ```typescript
-import { Memtrace } from '@memtrace/sdk'
+import { Memtrace } from '@basekick-labs/memtrace-sdk'
 
 const client = new Memtrace('http://localhost:9100', 'mtk_...')
 
@@ -75,7 +75,7 @@ const searchResult = await client.searchMemories({
 ### Agent Management
 
 ```typescript
-import { Memtrace } from '@memtrace/sdk'
+import { Memtrace } from '@basekick-labs/memtrace-sdk'
 
 const client = new Memtrace('http://localhost:9100', 'mtk_...')
 
@@ -98,7 +98,7 @@ console.log(`Active sessions: ${stats.active_sessions}`)
 ### Session Management
 
 ```typescript
-import { Memtrace } from '@memtrace/sdk'
+import { Memtrace } from '@basekick-labs/memtrace-sdk'
 
 const client = new Memtrace('http://localhost:9100', 'mtk_...')
 
@@ -116,6 +116,10 @@ const ctx = await client.getSessionContext(session.id, {
 })
 console.log(ctx.context) // Markdown-formatted for LLM consumption
 
+// List sessions (optionally filtered by agent)
+const all = await client.listSessions()
+const forAgent = await client.listSessions('agent_1')
+
 // Close the session
 await client.closeSession(session.id)
 ```
@@ -123,7 +127,7 @@ await client.closeSession(session.id)
 ## Error Handling
 
 ```typescript
-import { Memtrace, MemtraceError, AuthenticationError, NotFoundError, ConflictError } from '@memtrace/sdk'
+import { Memtrace, MemtraceError, AuthenticationError, NotFoundError, ConflictError } from '@basekick-labs/memtrace-sdk'
 
 const client = new Memtrace('http://localhost:9100', 'mtk_...')
 
