@@ -223,11 +223,14 @@ jobs:
   build-binaries-macos:
     name: Build macOS Binaries
     needs: prepare
+    # NOTE: Intel Mac (darwin-amd64) is intentionally dropped. The macos-13
+    # runner pool is unreliable (multi-hour queue times) and Apple Silicon
+    # covers the overwhelming majority of macOS developers. If we ever need
+    # to ship Intel Mac binaries again, add a `macos-13 / darwin-amd64` row
+    # to the matrix below.
     strategy:
       matrix:
         include:
-          - runner: macos-13       # Intel runner
-            suffix: darwin-amd64
           - runner: macos-14       # Apple Silicon runner
             suffix: darwin-arm64
     runs-on: ${{ matrix.runner }}
@@ -686,14 +689,16 @@ jobs:
           sudo rpm -i memtrace-${VERSION}-1.x86_64.rpm
           \`\`\`
 
-          ### macOS (Apple Silicon, Intel)
+          ### macOS (Apple Silicon)
 
           \`\`\`bash
-          # Apple Silicon
           curl -L -o memtrace.tar.gz \\
             https://github.com/Basekick-Labs/memtrace/releases/download/v${VERSION}/memtrace-darwin-arm64.tar.gz
           tar -xzf memtrace.tar.gz
           \`\`\`
+
+          Intel Mac is not bundled in this release. Build from source:
+          \`go install github.com/Basekick-Labs/memtrace/cmd/memtrace@v${VERSION}\`
 
           ## Verify checksums
 
@@ -740,7 +745,6 @@ jobs:
             echo "| Docker | \`ghcr.io/basekick-labs/memtrace:${VERSION}\` |"
             echo "| Linux amd64 | \`memtrace-linux-amd64.tar.gz\` |"
             echo "| Linux arm64 | \`memtrace-linux-arm64.tar.gz\` |"
-            echo "| macOS amd64 | \`memtrace-darwin-amd64.tar.gz\` |"
             echo "| macOS arm64 | \`memtrace-darwin-arm64.tar.gz\` |"
             echo "| Debian amd64 | \`memtrace_${VERSION}_amd64.deb\` |"
             echo "| Debian arm64 | \`memtrace_${VERSION}_arm64.deb\` |"

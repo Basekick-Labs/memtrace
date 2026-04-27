@@ -122,21 +122,21 @@ sudo rpm -i memtrace-0.2.0-1.x86_64.rpm
 # (then follow the same provisioning steps as the Debian path)
 ```
 
-### macOS (Apple Silicon, Intel)
+### macOS (Apple Silicon)
 
 ```bash
-# Apple Silicon
 curl -L -o memtrace.tar.gz \
   https://github.com/Basekick-Labs/memtrace/releases/download/v0.2.0/memtrace-darwin-arm64.tar.gz
 tar -xzf memtrace.tar.gz
-
-# Intel
-curl -L -o memtrace.tar.gz \
-  https://github.com/Basekick-Labs/memtrace/releases/download/v0.2.0/memtrace-darwin-amd64.tar.gz
-tar -xzf memtrace.tar.gz
 ```
 
-The macOS binaries are not signed or notarized in v0.2.0. On first run, macOS will prompt; right-click → Open to allow.
+Intel Mac is not bundled in this release — `macos-13` runner pool latency made it impractical. If you're on Intel Mac, build from source:
+
+```bash
+go install github.com/Basekick-Labs/memtrace/cmd/memtrace@v0.2.0
+```
+
+The macOS binary is not signed or notarized in v0.2.0. On first run, macOS will prompt; right-click → Open to allow.
 
 ## Download artifacts
 
@@ -149,7 +149,6 @@ The macOS binaries are not signed or notarized in v0.2.0. On first run, macOS wi
 | RHEL / Fedora | aarch64 | `memtrace-0.2.0-1.aarch64.rpm` |
 | Linux | amd64 | `memtrace-linux-amd64.tar.gz` |
 | Linux | arm64 | `memtrace-linux-arm64.tar.gz` |
-| macOS | amd64 | `memtrace-darwin-amd64.tar.gz` |
 | macOS | arm64 | `memtrace-darwin-arm64.tar.gz` |
 
 Each artifact ships with a `.sha256` checksum file. Verify with `sha256sum -c memtrace-linux-amd64.tar.gz.sha256` (or `shasum -a 256 -c` on macOS).
