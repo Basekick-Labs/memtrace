@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"time"
 
 	"github.com/Basekick-Labs/memtrace/internal/arc"
@@ -10,15 +9,15 @@ import (
 
 // HealthHandler handles health and readiness endpoints
 type HealthHandler struct {
-	arcClient *arc.Client
-	startTime time.Time
+	arcRegistry *arc.Registry
+	startTime   time.Time
 }
 
 // NewHealthHandler creates a new health handler
-func NewHealthHandler(arcClient *arc.Client) *HealthHandler {
+func NewHealthHandler(arcRegistry *arc.Registry) *HealthHandler {
 	return &HealthHandler{
-		arcClient: arcClient,
-		startTime: time.Now(),
+		arcRegistry: arcRegistry,
+		startTime:   time.Now(),
 	}
 }
 
@@ -33,22 +32,39 @@ func (h *HealthHandler) handleHealth(c *fiber.Ctx) error {
 		"status":  "ok",
 		"service": "memtrace",
 		"uptime":  time.Since(h.startTime).String(),
+		"arc":     h.arcRegistry.Health(),
 	})
 }
 
+// handleReady returns 200 only when every configured Arc instance is reachable.
+// With no instances configured, it returns 503 with a "no_instances" hint so
+// operators notice the deployment isn't usable yet.
 func (h *HealthHandler) handleReady(c *fiber.Ctx) error {
-	ctx, cancel := context.WithTimeout(c.Context(), 5*time.Second)
-	defer cancel()
-
-	if err := h.arcClient.Ping(ctx); err != nil {
+	health := h.arcRegistry.Health()
+	if len(health) == 0 {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"status": "not ready",
-			"error":  "Arc is unreachable: " + err.Error(),
+			"reason": "no_instances",
+			"hint":   "configure an Arc instance with `memtrace org add-arc`",
+		})
+	}
+
+	allHealthy := true
+	for _, ok := range health {
+		if !ok {
+			allHealthy = false
+			break
+		}
+	}
+	if !allHealthy {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"status": "not ready",
+			"arc":    health,
 		})
 	}
 
 	return c.JSON(fiber.Map{
 		"status": "ready",
-		"arc":    "connected",
+		"arc":    health,
 	})
 }

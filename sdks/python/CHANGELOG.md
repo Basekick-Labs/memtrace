@@ -5,6 +5,12 @@ All notable changes to `memtrace-sdk` (Python) are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-27
+
+### Added
+- `NoArcInstanceError` exception, raised on `503` responses when the caller's organization has no Arc instance configured. Memtrace deployments are multi-tenant; an administrator must run `memtrace org add-arc <org_id>` before that organization can read or write memories. Subclass of `MemtraceError`.
+- README note about multi-tenant deployments: one Memtrace deployment can serve multiple organizations, each routed to its own Arc instance, selected automatically by the API key.
+
 ## [0.1.1] - 2026-04-16
 
 ### Security

@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import httpx
 
-from .exceptions import AuthenticationError, ConflictError, MemtraceError, NotFoundError
+from .exceptions import (
+    AuthenticationError,
+    ConflictError,
+    MemtraceError,
+    NoArcInstanceError,
+    NotFoundError,
+)
 
 DEFAULT_TIMEOUT = 30.0
 
@@ -39,5 +45,7 @@ def handle_error(response: httpx.Response) -> None:
         raise NotFoundError(message)
     if response.status_code == 409:
         raise ConflictError(message)
+    if response.status_code == 503 and "arc instance" in message.lower():
+        raise NoArcInstanceError(message)
 
     raise MemtraceError(message, status_code=response.status_code)

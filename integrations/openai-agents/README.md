@@ -91,17 +91,30 @@ await session.close()
 
 When `inject_context=True` (default), the session fetches prior memory context from Memtrace and injects it as the first conversation item. This gives the agent continuity across sessions without manual history management.
 
+## Multi-tenant Deployments
+
+A Memtrace deployment can serve multiple organizations, each routed to its own Arc instance. The integration is unchanged — you still pass an `AsyncMemtrace(base_url, api_key)` client. Memtrace looks up the organization that owns your API key and forwards reads and writes to that org's Arc instance automatically. Provision each organization with the `memtrace org` and `memtrace key` admin CLI on the server.
+
 ## Error Handling
 
 Memtrace SDK exceptions propagate from tool invocations:
 
 ```python
-from memtrace import MemtraceError, AuthenticationError, NotFoundError
+from memtrace import (
+    MemtraceError,
+    AuthenticationError,
+    NotFoundError,
+    NoArcInstanceError,
+)
 
 try:
     result = await Runner.run(agent, "Hello", session=session)
 except AuthenticationError:
     print("Invalid Memtrace API key")
+except NoArcInstanceError:
+    # The Memtrace org bound to this API key has no Arc instance configured.
+    # Ask an admin to run `memtrace org add-arc <org_id>`.
+    print("Memtrace is not provisioned for this org yet")
 except MemtraceError as e:
     print(f"Memtrace error ({e.status_code}): {e.message}")
 ```

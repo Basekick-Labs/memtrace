@@ -29,3 +29,14 @@ class ConflictError(MemtraceError):
 
     def __init__(self, message: str = "Conflict"):
         super().__init__(message, status_code=409)
+
+
+class NoArcInstanceError(MemtraceError):
+    """Raised on 503 responses when the caller's organization has no Arc
+    instance configured. The Memtrace deployment is multi-tenant; an
+    administrator must run ``memtrace org add-arc <org_id>`` before this
+    organization's API keys can read or write memories.
+    """
+
+    def __init__(self, message: str = "no arc instance configured for this org"):
+        super().__init__(message, status_code=503)

@@ -3,7 +3,13 @@
 from ._version import __version__
 from .async_client import AsyncMemtrace
 from .client import Memtrace
-from .exceptions import AuthenticationError, ConflictError, MemtraceError, NotFoundError
+from .exceptions import (
+    AuthenticationError,
+    ConflictError,
+    MemtraceError,
+    NoArcInstanceError,
+    NotFoundError,
+)
 from .models import (
     AddMemoryRequest,
     Agent,
@@ -32,6 +38,7 @@ __all__ = [
     "AuthenticationError",
     "NotFoundError",
     "ConflictError",
+    "NoArcInstanceError",
     # Models
     "AddMemoryRequest",
     "Agent",

@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "memtrace-sdk>=0.1.0",
+    "memtrace-sdk>=0.2.0",
     "openai-agents>=0.1.0",
 ]
 

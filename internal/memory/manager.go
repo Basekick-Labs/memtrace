@@ -14,15 +14,15 @@ import (
 
 // Manager orchestrates memory CRUD operations
 type Manager struct {
-	arcClient   *arc.Client
+	arcRegistry *arc.Registry
 	dedupEngine *DedupEngine
 	logger      zerolog.Logger
 }
 
 // NewManager creates a new memory manager
-func NewManager(arcClient *arc.Client, dedupEngine *DedupEngine, logger zerolog.Logger) *Manager {
+func NewManager(arcRegistry *arc.Registry, dedupEngine *DedupEngine, logger zerolog.Logger) *Manager {
 	return &Manager{
-		arcClient:   arcClient,
+		arcRegistry: arcRegistry,
 		dedupEngine: dedupEngine,
 		logger:      logger.With().Str("component", "memory").Logger(),
 	}
@@ -106,7 +106,11 @@ func (m *Manager) Create(ctx context.Context, orgID string, req *CreateRequest) 
 		"parent_id":     req.ParentID,
 	}
 
-	if err := m.arcClient.BufferWrite(record); err != nil {
+	arcClient, err := m.arcRegistry.Get(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if err := arcClient.BufferWrite(record); err != nil {
 		return nil, fmt.Errorf("failed to write memory: %w", err)
 	}
 
@@ -147,8 +151,11 @@ func (m *Manager) CreateBatch(ctx context.Context, orgID string, requests []Crea
 		}
 		results = append(results, mem)
 	}
-	if err := m.arcClient.Flush(ctx); err != nil {
-		m.logger.Error().Err(err).Msg("Failed to flush after batch create")
+	arcClient, err := m.arcRegistry.Get(orgID)
+	if err == nil {
+		if err := arcClient.Flush(ctx); err != nil {
+			m.logger.Error().Err(err).Msg("Failed to flush after batch create")
+		}
 	}
 	return results, nil
 }
@@ -161,11 +168,15 @@ func (m *Manager) List(ctx context.Context, orgID string, opts *ListOptions) (*M
 
 	sql := buildListSQL(orgID, opts)
 
-	if err := m.arcClient.Flush(ctx); err != nil {
+	arcClient, err := m.arcRegistry.Get(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if err := arcClient.Flush(ctx); err != nil {
 		m.logger.Warn().Err(err).Msg("Failed to flush before list")
 	}
 
-	rows, err := m.arcClient.Query(ctx, sql)
+	rows, err := arcClient.Query(ctx, sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query memories: %w", err)
 	}
@@ -196,11 +207,15 @@ func (m *Manager) Search(ctx context.Context, orgID string, query *SearchQuery) 
 	start := time.Now()
 	sql := buildSearchSQL(orgID, query)
 
-	if err := m.arcClient.Flush(ctx); err != nil {
+	arcClient, err := m.arcRegistry.Get(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if err := arcClient.Flush(ctx); err != nil {
 		m.logger.Warn().Err(err).Msg("Failed to flush before search")
 	}
 
-	rows, err := m.arcClient.Query(ctx, sql)
+	rows, err := arcClient.Query(ctx, sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search memories: %w", err)
 	}

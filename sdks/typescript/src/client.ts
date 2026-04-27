@@ -3,6 +3,7 @@ import {
   AuthenticationError,
   NotFoundError,
   ConflictError,
+  NoArcInstanceError,
 } from "./errors";
 import type {
   Memory,
@@ -264,6 +265,14 @@ export class Memtrace {
         throw new NotFoundError(message);
       case 409:
         throw new ConflictError(message);
+      case 503:
+        // Distinguish "this org has no arc instance" from a generic 503 so
+        // callers can catch the typed error. Match on the server error text
+        // — the only 503 Memtrace itself emits today is the no-arc-instance one.
+        if (message.toLowerCase().includes("arc instance")) {
+          throw new NoArcInstanceError(message);
+        }
+        throw new MemtraceError(message, status);
       default:
         throw new MemtraceError(message, status);
     }

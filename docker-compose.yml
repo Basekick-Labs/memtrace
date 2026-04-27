@@ -14,10 +14,22 @@ services:
     networks:
       - traefik
     environment:
-      - MEMTRACE_ARC_URL=http://arc:8000
-      - MEMTRACE_ARC_API_KEY=${ARC_API_KEY:-}
+      # Required: AES-256-GCM master key used to encrypt per-org Arc API keys at
+      # rest. Generate once with `docker run --rm memtrace memtrace keygen master`
+      # and inject from your secret manager. Losing this value makes encrypted
+      # secrets unrecoverable.
+      - MEMTRACE_MASTER_KEY=${MEMTRACE_MASTER_KEY:?MEMTRACE_MASTER_KEY is required}
       - MEMTRACE_AUTH_ENABLED=true
       - MEMTRACE_LOG_FORMAT=json
+      # Per-org Arc connections (URL, API key, database) live in the metadata
+      # DB and are managed via the `memtrace org` CLI — there are no
+      # MEMTRACE_ARC_URL / MEMTRACE_ARC_API_KEY env vars anymore. After the
+      # container is up, provision orgs with:
+      #
+      #   docker compose exec memtrace memtrace org create acme
+      #   docker compose exec memtrace memtrace org add-arc <org_id> \
+      #       --url http://arc:8000 --api-key <key> --database <db>
+      #   docker compose exec memtrace memtrace key create --org <org_id> --name <name>
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.memtrace.rule=Host(`memtrace.basekick.net`)"

@@ -14,6 +14,11 @@ type Config struct {
 	Arc    ArcConfig
 	Auth   AuthConfig
 	Dedup  DedupConfig
+
+	// LegacyArc carries the deprecated flat [arc] block fields. Populated only
+	// for one-shot auto-migration into the metadata DB on first startup. Once
+	// arc_instances is non-empty these fields are ignored.
+	LegacyArc LegacyArcConfig
 }
 
 type ServerConfig struct {
@@ -29,15 +34,23 @@ type LogConfig struct {
 	Format string
 }
 
+// ArcConfig holds the global timing/batch knobs shared by every Arc client.
+// Per-org URL, API key, database, and measurement are stored in the metadata
+// DB (see internal/metadata/arc_instances.go) and configured via the admin CLI.
 type ArcConfig struct {
-	URL                  string
-	APIKey               string
-	Database             string
-	Measurement          string
 	ConnectTimeout       int
 	QueryTimeout         int
 	WriteBatchSize       int
 	WriteFlushIntervalMS int
+}
+
+// LegacyArcConfig is the pre-multi-tenant flat [arc] block. Read for migration
+// only and removed in a future release once the migration code is deleted.
+type LegacyArcConfig struct {
+	URL         string
+	APIKey      string
+	Database    string
+	Measurement string
 }
 
 type AuthConfig struct {
@@ -87,14 +100,16 @@ func Load() (*Config, error) {
 			Format: v.GetString("log.format"),
 		},
 		Arc: ArcConfig{
-			URL:                  v.GetString("arc.url"),
-			APIKey:               v.GetString("arc.api_key"),
-			Database:             v.GetString("arc.database"),
-			Measurement:          v.GetString("arc.measurement"),
 			ConnectTimeout:       v.GetInt("arc.connect_timeout"),
 			QueryTimeout:         v.GetInt("arc.query_timeout"),
 			WriteBatchSize:       v.GetInt("arc.write_batch_size"),
 			WriteFlushIntervalMS: v.GetInt("arc.write_flush_interval_ms"),
+		},
+		LegacyArc: LegacyArcConfig{
+			URL:         v.GetString("arc.url"),
+			APIKey:      v.GetString("arc.api_key"),
+			Database:    v.GetString("arc.database"),
+			Measurement: v.GetString("arc.measurement"),
 		},
 		Auth: AuthConfig{
 			Enabled: v.GetBool("auth.enabled"),
@@ -119,10 +134,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.format", "console")
 
-	v.SetDefault("arc.url", "http://localhost:8000")
-	v.SetDefault("arc.api_key", "")
-	v.SetDefault("arc.database", "memory")
-	v.SetDefault("arc.measurement", "events")
 	v.SetDefault("arc.connect_timeout", 5)
 	v.SetDefault("arc.query_timeout", 30)
 	v.SetDefault("arc.write_batch_size", 100)

@@ -14,10 +14,9 @@ level = "info"
 format = "console"    # "json" for production
 
 [arc]
-url = "http://localhost:8000"
-api_key = ""
-database = "memory"
-measurement = "events"
+# Per-org Arc connection details (URL, API key, database, measurement) live in
+# the metadata DB and are managed via `memtrace org add-arc`. The fields below
+# are global knobs that apply to every Arc client.
 connect_timeout = 5
 query_timeout = 30
 write_batch_size = 100

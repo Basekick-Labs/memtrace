@@ -38,9 +38,7 @@ func (h *SearchHandler) handleSearch(c *fiber.Ctx) error {
 
 	result, err := h.manager.Search(c.Context(), orgID, &query)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	h.logger.Info().

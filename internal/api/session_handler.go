@@ -62,9 +62,7 @@ func (h *SessionHandler) handleList(c *fiber.Ctx) error {
 
 	sessions, err := h.sessionManager.List(c.Context(), orgID, agentID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	if sessions == nil {
@@ -83,9 +81,7 @@ func (h *SessionHandler) handleGet(c *fiber.Ctx) error {
 
 	s, err := h.sessionManager.Get(c.Context(), orgID, sessionID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 	if s == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -131,9 +127,7 @@ func (h *SessionHandler) handleMemories(c *fiber.Ctx) error {
 
 	list, err := h.memoryManager.List(c.Context(), orgID, opts)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	return c.JSON(list)
@@ -151,9 +145,7 @@ func (h *SessionHandler) handleContext(c *fiber.Ctx) error {
 
 	ctx, err := h.sessionManager.GetContext(c.Context(), orgID, sessionID, &opts)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	h.logger.Info().Str("org_id", orgID).Str("session_id", sessionID).Int("memory_count", ctx.MemoryCount).Msg("Session context loaded")

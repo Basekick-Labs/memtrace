@@ -6,7 +6,13 @@ import httpx
 import pytest
 
 from memtrace import Memtrace
-from memtrace.exceptions import AuthenticationError, ConflictError, MemtraceError, NotFoundError
+from memtrace.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    MemtraceError,
+    NoArcInstanceError,
+    NotFoundError,
+)
 from memtrace.models import (
     AddMemoryRequest,
     ContextOptions,
@@ -373,6 +379,29 @@ class TestErrorHandling:
         with pytest.raises(MemtraceError) as exc_info:
             client.get_agent("x")
         assert exc_info.value.status_code == 500
+
+    def test_503_no_arc_instance_raises_typed_error(self, client, mock_api):
+        mock_api.get("/api/v1/agents/x").mock(
+            return_value=httpx.Response(
+                503,
+                json={"error": "no arc instance configured for this org"},
+            )
+        )
+        with pytest.raises(NoArcInstanceError) as exc_info:
+            client.get_agent("x")
+        assert exc_info.value.status_code == 503
+        # Falls through MemtraceError so generic handlers still catch it.
+        assert isinstance(exc_info.value, MemtraceError)
+
+    def test_503_unrelated_falls_back_to_memtrace_error(self, client, mock_api):
+        # A 503 without "arc instance" in the message should NOT be misclassified.
+        mock_api.get("/api/v1/agents/x").mock(
+            return_value=httpx.Response(503, json={"error": "upstream timeout"})
+        )
+        with pytest.raises(MemtraceError) as exc_info:
+            client.get_agent("x")
+        assert not isinstance(exc_info.value, NoArcInstanceError)
+        assert exc_info.value.status_code == 503
 
     def test_error_without_json_body(self, client, mock_api):
         mock_api.get("/api/v1/agents/x").mock(

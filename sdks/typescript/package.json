@@ -1,6 +1,6 @@
 {
   "name": "@basekick-labs/memtrace-sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "TypeScript SDK for Memtrace — LLM-agnostic memory layer for AI agents",
   "license": "MIT",
   "author": "Basekick Labs",

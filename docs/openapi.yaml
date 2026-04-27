@@ -43,7 +43,7 @@ paths:
       security: []
       responses:
         "200":
-          description: Service is running
+          description: Service is running. The `arc` map reports the last-known connection state of each org's Arc instance.
           content:
             application/json:
               schema:
@@ -58,16 +58,23 @@ paths:
                   uptime:
                     type: string
                     example: 2h30m15s
+                  arc:
+                    type: object
+                    additionalProperties:
+                      type: boolean
+                    example:
+                      org_default: true
+                      org_acme: true
 
   /ready:
     get:
       operationId: getReady
       tags: [Health]
-      summary: Readiness check (Arc connectivity)
+      summary: Readiness check (every configured Arc instance must be reachable)
       security: []
       responses:
         "200":
-          description: Service is ready
+          description: Service is ready (every configured Arc instance is reachable)
           content:
             application/json:
               schema:
@@ -77,10 +84,14 @@ paths:
                     type: string
                     example: ready
                   arc:
-                    type: string
-                    example: connected
+                    type: object
+                    additionalProperties:
+                      type: boolean
+                    example:
+                      org_default: true
+                      org_acme: true
         "503":
-          description: Service is not ready
+          description: Service is not ready (no Arc instances configured, or at least one is unreachable)
           content:
             application/json:
               schema:
@@ -89,9 +100,18 @@ paths:
                   status:
                     type: string
                     example: not ready
-                  error:
+                  reason:
                     type: string
-                    example: "Arc is unreachable: connection refused"
+                    description: Set to `no_instances` when no Arc instances are configured at all.
+                    example: no_instances
+                  hint:
+                    type: string
+                    example: "configure an Arc instance with `memtrace org add-arc`"
+                  arc:
+                    type: object
+                    additionalProperties:
+                      type: boolean
+                    description: Per-org Arc connection state. Present when at least one instance is configured.
 
   # ── Memories ────────────────────────────────
 

@@ -27,7 +27,7 @@ func New(dbPath string, logger zerolog.Logger) (*DB, error) {
 		return nil, fmt.Errorf("failed to create db directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=ON")
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=ON&_loc=auto")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open metadata database: %w", err)
 	}
@@ -99,6 +99,19 @@ func (mdb *DB) initSchema() error {
 		`CREATE INDEX IF NOT EXISTS idx_sessions_org ON sessions(org_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`,
+		`CREATE TABLE IF NOT EXISTS arc_instances (
+			id TEXT PRIMARY KEY,
+			org_id TEXT NOT NULL UNIQUE,
+			url TEXT NOT NULL,
+			api_key_cipher BLOB NOT NULL,
+			api_key_nonce BLOB NOT NULL,
+			database TEXT NOT NULL,
+			measurement TEXT NOT NULL DEFAULT 'events',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_arc_instances_org ON arc_instances(org_id)`,
 	}
 
 	for _, stmt := range statements {

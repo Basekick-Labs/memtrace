@@ -47,17 +47,17 @@ type Stats struct {
 
 // Manager handles agent CRUD
 type Manager struct {
-	db        *sql.DB
-	arcClient *arc.Client
-	logger    zerolog.Logger
+	db          *sql.DB
+	arcRegistry *arc.Registry
+	logger      zerolog.Logger
 }
 
 // NewManager creates a new agent manager
-func NewManager(metaDB *metadata.DB, arcClient *arc.Client, logger zerolog.Logger) *Manager {
+func NewManager(metaDB *metadata.DB, arcRegistry *arc.Registry, logger zerolog.Logger) *Manager {
 	return &Manager{
-		db:        metaDB.GetDB(),
-		arcClient: arcClient,
-		logger:    logger.With().Str("component", "agent").Logger(),
+		db:          metaDB.GetDB(),
+		arcRegistry: arcRegistry,
+		logger:      logger.With().Str("component", "agent").Logger(),
 	}
 }
 
@@ -223,30 +223,35 @@ func (m *Manager) GetStats(ctx context.Context, orgID, agentID string) (*Stats, 
 	agentCond := sanitize.SQLCondition("agent_id", agentID)
 	baseWhere := orgCond + " AND " + agentCond
 
+	arcClient, err := m.arcRegistry.Get(orgID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Total memory count
 	countSQL := fmt.Sprintf("SELECT COUNT(*) as cnt FROM events WHERE %s", baseWhere)
-	rows, err := m.arcClient.Query(ctx, countSQL)
+	rows, err := arcClient.Query(ctx, countSQL)
 	if err == nil && len(rows) > 0 {
 		stats.MemoryCount = parseCount(rows[0]["cnt"])
 	}
 
 	// 24h counts
 	count24hSQL := fmt.Sprintf("SELECT COUNT(*) as cnt FROM events WHERE %s AND time > (CURRENT_TIMESTAMP - INTERVAL '24 hours')", baseWhere)
-	rows, err = m.arcClient.Query(ctx, count24hSQL)
+	rows, err = arcClient.Query(ctx, count24hSQL)
 	if err == nil && len(rows) > 0 {
 		stats.Memories24h = parseCount(rows[0]["cnt"])
 	}
 
 	// Error count 24h
 	errSQL := fmt.Sprintf("SELECT COUNT(*) as cnt FROM events WHERE %s AND event_type = 'error' AND time > (CURRENT_TIMESTAMP - INTERVAL '24 hours')", baseWhere)
-	rows, err = m.arcClient.Query(ctx, errSQL)
+	rows, err = arcClient.Query(ctx, errSQL)
 	if err == nil && len(rows) > 0 {
 		stats.Errors24h = parseCount(rows[0]["cnt"])
 	}
 
 	// Memory type breakdown
 	typeSQL := fmt.Sprintf("SELECT memory_type, COUNT(*) as cnt FROM events WHERE %s GROUP BY memory_type", baseWhere)
-	rows, err = m.arcClient.Query(ctx, typeSQL)
+	rows, err = arcClient.Query(ctx, typeSQL)
 	if err == nil {
 		for _, row := range rows {
 			if t, ok := row["memory_type"].(string); ok {

@@ -26,7 +26,7 @@ type Server struct {
 // NewServer creates and configures the HTTP server
 func NewServer(
 	cfg *config.Config,
-	arcCli *arcClient.Client,
+	arcRegistry *arcClient.Registry,
 	authManager *auth.Manager,
 	memoryManager *memory.Manager,
 	agentManager *agent.Manager,
@@ -57,7 +57,7 @@ func NewServer(
 	})
 
 	// Health endpoints (no auth)
-	healthHandler := NewHealthHandler(arcCli)
+	healthHandler := NewHealthHandler(arcRegistry)
 	healthHandler.RegisterRoutes(app)
 
 	// API group with auth

@@ -68,9 +68,7 @@ func (h *AgentHandler) handleList(c *fiber.Ctx) error {
 
 	agents, err := h.agentManager.List(c.Context(), orgID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	if agents == nil {
@@ -89,9 +87,7 @@ func (h *AgentHandler) handleGet(c *fiber.Ctx) error {
 
 	a, err := h.agentManager.Get(c.Context(), orgID, agentID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 	if a == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -117,9 +113,7 @@ func (h *AgentHandler) handleMemories(c *fiber.Ctx) error {
 
 	list, err := h.memoryManager.List(c.Context(), orgID, opts)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	return c.JSON(list)
@@ -131,9 +125,7 @@ func (h *AgentHandler) handleStats(c *fiber.Ctx) error {
 
 	stats, err := h.agentManager.GetStats(c.Context(), orgID, agentID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	return c.JSON(stats)

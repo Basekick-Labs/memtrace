@@ -18,15 +18,15 @@ var ErrDuplicate = errors.New("duplicate memory")
 
 // DedupEngine checks for duplicate memories before writing
 type DedupEngine struct {
-	arcClient   *arc.Client
+	arcRegistry *arc.Registry
 	windowHours int
 	logger      zerolog.Logger
 }
 
 // NewDedupEngine creates a new dedup engine
-func NewDedupEngine(arcClient *arc.Client, windowHours int, logger zerolog.Logger) *DedupEngine {
+func NewDedupEngine(arcRegistry *arc.Registry, windowHours int, logger zerolog.Logger) *DedupEngine {
 	return &DedupEngine{
-		arcClient:   arcClient,
+		arcRegistry: arcRegistry,
 		windowHours: windowHours,
 		logger:      logger.With().Str("component", "dedup").Logger(),
 	}
@@ -59,7 +59,13 @@ func (d *DedupEngine) Check(ctx context.Context, orgID, dedupKey string) error {
 		d.windowHours,
 	)
 
-	rows, err := d.arcClient.Query(ctx, sql)
+	arcClient, err := d.arcRegistry.Get(orgID)
+	if err != nil {
+		// No Arc instance for this org — let the upstream write fail with the same error
+		d.logger.Warn().Err(err).Msg("Dedup check skipped: no arc instance")
+		return nil
+	}
+	rows, err := arcClient.Query(ctx, sql)
 	if err != nil {
 		// If Arc is unreachable, allow the write (fail open)
 		d.logger.Warn().Err(err).Msg("Dedup check failed, allowing write")

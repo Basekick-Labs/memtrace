@@ -266,10 +266,11 @@ func (c *Client) doRequest(req *http.Request, result interface{}) error {
 		var errResp struct {
 			Error string `json:"error"`
 		}
+		message := string(body)
 		if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
-			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, errResp.Error)
+			message = errResp.Error
 		}
-		return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		return &APIError{StatusCode: resp.StatusCode, Message: message}
 	}
 
 	if result != nil {

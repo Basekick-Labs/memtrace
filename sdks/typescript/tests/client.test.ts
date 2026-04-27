@@ -4,6 +4,7 @@ import {
   AuthenticationError,
   ConflictError,
   MemtraceError,
+  NoArcInstanceError,
   NotFoundError,
 } from "../src/errors";
 import {
@@ -294,6 +295,34 @@ describe("error handling", () => {
         content: "dup",
       }),
     ).rejects.toThrow(ConflictError);
+  });
+
+  it("throws NoArcInstanceError on 503 when org has no arc instance", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(503, { error: "no arc instance configured for this org" }),
+    );
+    await expect(client.getAgent("x")).rejects.toSatisfy(
+      (e: MemtraceError) => {
+        expect(e).toBeInstanceOf(NoArcInstanceError);
+        // Subclass of MemtraceError so generic handlers still catch it.
+        expect(e).toBeInstanceOf(MemtraceError);
+        expect(e.statusCode).toBe(503);
+        return true;
+      },
+    );
+  });
+
+  it("falls back to MemtraceError for unrelated 503s", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(503, { error: "upstream timeout" }),
+    );
+    await expect(client.getAgent("x")).rejects.toSatisfy(
+      (e: MemtraceError) => {
+        expect(e).not.toBeInstanceOf(NoArcInstanceError);
+        expect(e.statusCode).toBe(503);
+        return true;
+      },
+    );
   });
 
   it("throws MemtraceError on 500 with statusCode", async () => {

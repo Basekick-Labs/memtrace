@@ -6,6 +6,7 @@ export {
   AuthenticationError,
   NotFoundError,
   ConflictError,
+  NoArcInstanceError,
 } from "./errors";
 
 export type {

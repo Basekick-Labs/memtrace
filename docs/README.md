@@ -77,7 +77,7 @@ Long-running ETL or data enrichment agents that process millions of records in b
 ### 1. Prerequisites
 
 - Go 1.25+
-- A running [Arc](https://github.com/Basekick-Labs/arc) instance
+- A running [Arc](https://github.com/Basekick-Labs/arc) instance (one or more — Memtrace is multi-tenant and can route different orgs to different Arc instances)
 
 ### 2. Install
 
@@ -87,27 +87,58 @@ cd memtrace
 make build
 ```
 
-### 3. Configure
+### 3. Generate a master key
+
+Memtrace encrypts each org's Arc API key at rest using AES-256-GCM. Generate the master key once and put it in your secret manager — losing it makes encrypted secrets unrecoverable.
 
 ```bash
-cp memtrace.toml memtrace.local.toml
-# Edit memtrace.local.toml with your Arc URL
+export MEMTRACE_MASTER_KEY=$(./memtrace keygen master)
 ```
 
-### 4. Run
+The same value must be available to both `memtrace serve` and the `memtrace` admin CLI.
+
+### 4. Run the server
+
+The default `memtrace.toml` works as-is.
 
 ```bash
-./memtrace
+./memtrace serve   # or just `./memtrace`
 ```
 
-On first run, Memtrace prints your admin API key. **Save it — it's shown only once.**
+On first run with auth enabled, Memtrace prints your admin API key for the bootstrap org. **Save it — it's shown only once.**
 
 ```
 FIRST RUN: Save your admin API key (shown only once)
 API Key: mtk_...
 ```
 
-### 5. Use It
+### 5. Configure an org and its Arc instance
+
+If this is a fresh install, the bootstrap org (`org_default`) has no Arc instance yet — bind one:
+
+```bash
+./memtrace org add-arc org_default \
+    --url http://localhost:8000 \
+    --api-key <arc-api-key> \
+    --database memory
+```
+
+To run multiple tenants on the same Memtrace deployment, create another org and point it at a different Arc:
+
+```bash
+./memtrace org create acme
+# Organization created
+#   id:   org_a1b2c3d4...
+./memtrace org add-arc org_a1b2c3d4... \
+    --url https://arc.acme.example.com \
+    --api-key <arc-api-key> \
+    --database acme_memory
+./memtrace key create --org org_a1b2c3d4... --name acme-prod
+```
+
+Each API key is bound to one org, and every authenticated request is routed to that org's Arc instance.
+
+### 6. Use it
 
 ```bash
 # Store a memory
@@ -133,6 +164,8 @@ curl -X POST http://localhost:9100/api/v1/sessions/sess_abc/context \
   -H "Content-Type: application/json" \
   -d '{"since": "4h", "include_types": ["episodic", "decision"]}'
 ```
+
+> **Upgrading from a single-Arc deployment?** Memtrace auto-migrates a legacy `[arc]` block in `memtrace.toml` into the new schema on first startup. See the [Configuration guide](./configuration.md#auto-migration-from-the-legacy-arc-block).
 
 ## MCP Server (Claude Code, Cursor, etc.)
 

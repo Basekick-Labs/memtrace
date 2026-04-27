@@ -55,17 +55,17 @@ type SessionContext struct {
 
 // Manager handles session lifecycle
 type Manager struct {
-	db        *sql.DB
-	arcClient *arc.Client
-	logger    zerolog.Logger
+	db          *sql.DB
+	arcRegistry *arc.Registry
+	logger      zerolog.Logger
 }
 
 // NewManager creates a new session manager
-func NewManager(metaDB *metadata.DB, arcClient *arc.Client, logger zerolog.Logger) *Manager {
+func NewManager(metaDB *metadata.DB, arcRegistry *arc.Registry, logger zerolog.Logger) *Manager {
 	return &Manager{
-		db:        metaDB.GetDB(),
-		arcClient: arcClient,
-		logger:    logger.With().Str("component", "session").Logger(),
+		db:          metaDB.GetDB(),
+		arcRegistry: arcRegistry,
+		logger:      logger.With().Str("component", "session").Logger(),
 	}
 }
 
@@ -293,10 +293,15 @@ func (m *Manager) GetContext(ctx context.Context, orgID, sessionID string, opts 
 		strings.Join(conditions, " AND "),
 	)
 
-	// Flush before reading
-	m.arcClient.Flush(ctx)
+	arcClient, err := m.arcRegistry.Get(orgID)
+	if err != nil {
+		return nil, err
+	}
 
-	rows, err := m.arcClient.Query(ctx, query)
+	// Flush before reading
+	arcClient.Flush(ctx)
+
+	rows, err := arcClient.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query session context: %w", err)
 	}

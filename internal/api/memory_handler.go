@@ -1,6 +1,9 @@
 package api
 
 import (
+	"errors"
+
+	"github.com/Basekick-Labs/memtrace/internal/arc"
 	"github.com/Basekick-Labs/memtrace/internal/auth"
 	"github.com/Basekick-Labs/memtrace/internal/memory"
 	"github.com/gofiber/fiber/v2"
@@ -36,9 +39,7 @@ func (h *MemoryHandler) handleCreate(c *fiber.Ctx) error {
 	if err := c.BodyParser(&batch); err == nil && len(batch.Memories) > 0 {
 		results, err := h.manager.CreateBatch(c.Context(), orgID, batch.Memories)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return writeError(c, err)
 		}
 		h.logger.Info().Str("org_id", orgID).Int("count", len(results)).Msg("Batch memory create")
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -62,6 +63,9 @@ func (h *MemoryHandler) handleCreate(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": "duplicate memory",
 			})
+		}
+		if errors.Is(err, arc.ErrNoArcInstance) {
+			return writeError(c, err)
 		}
 		h.logger.Warn().Str("org_id", orgID).Str("agent_id", req.AgentID).Err(err).Msg("Memory create rejected")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -97,9 +101,7 @@ func (h *MemoryHandler) handleList(c *fiber.Ctx) error {
 
 	list, err := h.manager.List(c.Context(), orgID, opts)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 
 	h.logger.Info().
@@ -120,9 +122,7 @@ func (h *MemoryHandler) handleGet(c *fiber.Ctx) error {
 		Limit:           1,
 	})
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return writeError(c, err)
 	}
 	if result.Count == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{

@@ -3,22 +3,72 @@
 Base URL: `http://localhost:9100`
 Auth: `x-api-key: mtk_...` header or `Authorization: Bearer mtk_...`
 
+The API key identifies the caller's organization. Memtrace routes every request to that org's Arc instance. If the org has no Arc instance configured yet, requests return:
+
+```http
+503 Service Unavailable
+```
+```json
+{
+  "error": "no arc instance configured for this org",
+  "hint": "ask an admin to run `memtrace org add-arc <org_id>`"
+}
+```
+
 ## Health
 
 ### GET /health
 
-Returns service status. No auth required.
+Returns service status and the per-org Arc connection map. No auth required.
 
 ```json
-{"status": "ok", "service": "memtrace", "uptime": "2h30m15s"}
+{
+  "status": "ok",
+  "service": "memtrace",
+  "uptime": "2h30m15s",
+  "arc": {
+    "org_default": true,
+    "org_acme": true
+  }
+}
 ```
+
+The `arc` object reports the last-known health of each org's Arc instance from the background health check.
 
 ### GET /ready
 
-Checks Arc connectivity. No auth required.
+Returns `200` only when every configured Arc instance is reachable. No auth required.
 
 ```json
-{"status": "ready", "arc": "connected"}
+{
+  "status": "ready",
+  "arc": {
+    "org_default": true,
+    "org_acme": true
+  }
+}
+```
+
+When at least one Arc instance is unreachable, returns `503`:
+
+```json
+{
+  "status": "not ready",
+  "arc": {
+    "org_default": true,
+    "org_acme": false
+  }
+}
+```
+
+When no Arc instances are configured at all (fresh deployment), returns `503` with a hint:
+
+```json
+{
+  "status": "not ready",
+  "reason": "no_instances",
+  "hint": "configure an Arc instance with `memtrace org add-arc`"
+}
 ```
 
 ## Memories
