@@ -1,3 +1,9 @@
+# Memtrace — multi-tenant memory layer for AI agents (Go)
+# Multi-stage build for minimal image size
+
+ARG VERSION=dev
+
+# ---------- Build stage ----------
 FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev
@@ -5,22 +11,42 @@ RUN apk add --no-cache gcc musl-dev
 WORKDIR /build
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux go build -o memtrace ./cmd/memtrace/
 
+ARG VERSION
+RUN CGO_ENABLED=1 GOOS=linux go build \
+        -ldflags="-s -w -X main.version=${VERSION}" \
+        -o memtrace ./cmd/memtrace/
+
+# ---------- Production stage ----------
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates
+ARG VERSION
+
+RUN apk add --no-cache ca-certificates curl
+
+# Create non-root user
+RUN adduser -D -u 1000 memtrace && \
+    mkdir -p /app/data && \
+    chown -R memtrace:memtrace /app
 
 WORKDIR /app
 
-COPY --from=builder /build/memtrace .
-COPY --from=builder /build/memtrace.toml .
+COPY --from=builder --chown=memtrace:memtrace /build/memtrace .
+COPY --chown=memtrace:memtrace memtrace.toml .
 
-RUN mkdir -p /app/data
+# Persist version inside the image for diagnostics
+RUN echo "${VERSION}" > VERSION && chown memtrace:memtrace VERSION
+
+USER memtrace
+
+VOLUME ["/app/data"]
 
 EXPOSE 9100
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://127.0.0.1:9100/health || exit 1
 
 ENTRYPOINT ["./memtrace"]

@@ -1,0 +1,29 @@
+[Unit]
+Description=Memtrace — multi-tenant memory layer for AI agents
+Documentation=https://github.com/Basekick-Labs/memtrace
+After=network.target
+
+[Service]
+Type=simple
+User=memtrace
+Group=memtrace
+ExecStart=/usr/bin/memtrace serve
+WorkingDirectory=/var/lib/memtrace
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+# Environment file holds MEMTRACE_MASTER_KEY and any other secrets/overrides.
+# The .deb / .rpm packages create /etc/memtrace/environment with placeholders;
+# operators edit it before starting the service. Keep it 0600.
+EnvironmentFile=-/etc/memtrace/environment
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/memtrace /etc/memtrace
+
+[Install]
+WantedBy=multi-user.target

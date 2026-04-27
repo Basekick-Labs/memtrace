@@ -1,0 +1,751 @@
+name: Release Build
+
+# Triggered by pushing a `release/v<semver>` branch (e.g. release/v0.2.0) or
+# by clicking "Run workflow" in the Actions UI and providing a version.
+#
+# Produces:
+#   - Multi-arch Docker image at ghcr.io/basekick-labs/memtrace:<version> (+ :latest)
+#   - Linux native binaries (amd64, arm64) for memtrace and memtrace-mcp
+#   - macOS native binaries (amd64, arm64) for memtrace and memtrace-mcp
+#   - .deb packages (amd64, arm64) with systemd integration
+#   - .rpm packages (x86_64, aarch64) with systemd integration
+#   - A draft GitHub release with all artifacts attached
+
+on:
+  push:
+    branches:
+      - 'release/v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (semver, e.g. 0.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  REGISTRY_GHCR: ghcr.io
+  IMAGE_NAME: basekick-labs/memtrace
+  GO_VERSION: '1.25'
+
+jobs:
+  # --------------------------------------------------------------------
+  # 1. Validate + extract version
+  # --------------------------------------------------------------------
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      short_version: ${{ steps.version.outputs.short_version }}
+    steps:
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            # release/v0.2.0 -> 0.2.0
+            VERSION="${GITHUB_REF#refs/heads/release/v}"
+          fi
+
+          # Validate semver (X.Y.Z, optionally with -prerelease tag)
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Invalid version: $VERSION (expected semver, e.g. 0.2.0 or 0.2.0-rc.1)"
+            exit 1
+          fi
+
+          # Short version: 0.2.0 -> 0.2
+          SHORT_VERSION="${VERSION%.*}"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "short_version=$SHORT_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Building memtrace v$VERSION" >> $GITHUB_STEP_SUMMARY
+
+  # --------------------------------------------------------------------
+  # 2. Multi-arch Docker images via digest + manifest merge
+  # --------------------------------------------------------------------
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.version }}
+            type=raw,value=${{ needs.prepare.outputs.short_version }}
+            type=raw,value=latest
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-merge:
+    name: Merge Docker Manifests
+    runs-on: ubuntu-latest
+    needs: [prepare, docker-build]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          merge-multiple: true
+          path: /tmp/digests
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.version }} \
+            -t ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.short_version }} \
+            -t ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:latest \
+            $(printf '${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+  # --------------------------------------------------------------------
+  # 3. Native Linux binaries (CGO requires native runners for arm64)
+  # --------------------------------------------------------------------
+  build-binaries-linux:
+    name: Build Linux Binaries
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            suffix: linux-amd64
+          - runner: ubuntu-24.04-arm
+            suffix: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build server (CGO)
+        env:
+          CGO_ENABLED: 1
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          go build \
+            -ldflags "-s -w -X main.version=${VERSION}" \
+            -o memtrace-${{ matrix.suffix }} \
+            ./cmd/memtrace
+          chmod +x memtrace-${{ matrix.suffix }}
+          file memtrace-${{ matrix.suffix }}
+          ls -lh memtrace-${{ matrix.suffix }}
+
+      - name: Build MCP server (no CGO)
+        env:
+          CGO_ENABLED: 0
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          go build \
+            -ldflags "-s -w -X main.version=${VERSION}" \
+            -o memtrace-mcp-${{ matrix.suffix }} \
+            ./cmd/mcp
+          chmod +x memtrace-mcp-${{ matrix.suffix }}
+          ls -lh memtrace-mcp-${{ matrix.suffix }}
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: memtrace-binaries-${{ matrix.suffix }}
+          path: |
+            memtrace-${{ matrix.suffix }}
+            memtrace-mcp-${{ matrix.suffix }}
+          retention-days: 7
+
+  # --------------------------------------------------------------------
+  # 4. Native macOS binaries (no Apple notarization for v0.2.0)
+  # --------------------------------------------------------------------
+  build-binaries-macos:
+    name: Build macOS Binaries
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - runner: macos-13       # Intel runner
+            suffix: darwin-amd64
+          - runner: macos-14       # Apple Silicon runner
+            suffix: darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build server (CGO)
+        env:
+          CGO_ENABLED: 1
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          go build \
+            -ldflags "-s -w -X main.version=${VERSION}" \
+            -o memtrace-${{ matrix.suffix }} \
+            ./cmd/memtrace
+          chmod +x memtrace-${{ matrix.suffix }}
+          file memtrace-${{ matrix.suffix }}
+          ls -lh memtrace-${{ matrix.suffix }}
+
+      - name: Build MCP server (no CGO)
+        env:
+          CGO_ENABLED: 0
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          go build \
+            -ldflags "-s -w -X main.version=${VERSION}" \
+            -o memtrace-mcp-${{ matrix.suffix }} \
+            ./cmd/mcp
+          chmod +x memtrace-mcp-${{ matrix.suffix }}
+          ls -lh memtrace-mcp-${{ matrix.suffix }}
+
+      - name: Tar binaries (preserve executable bit on download)
+        run: |
+          tar -czf memtrace-${{ matrix.suffix }}.tar.gz \
+            memtrace-${{ matrix.suffix }} \
+            memtrace-mcp-${{ matrix.suffix }}
+          shasum -a 256 memtrace-${{ matrix.suffix }}.tar.gz \
+            > memtrace-${{ matrix.suffix }}.tar.gz.sha256
+
+      - name: Upload macOS tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: memtrace-darwin-${{ matrix.suffix }}
+          path: |
+            memtrace-${{ matrix.suffix }}.tar.gz
+            memtrace-${{ matrix.suffix }}.tar.gz.sha256
+          retention-days: 7
+
+  # --------------------------------------------------------------------
+  # 5. Debian packages
+  # --------------------------------------------------------------------
+  debian-build:
+    name: Build Debian Package
+    runs-on: ubuntu-latest
+    needs: [prepare, build-binaries-linux]
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            suffix: linux-amd64
+          - arch: arm64
+            suffix: linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: memtrace-binaries-${{ matrix.suffix }}
+
+      - name: Build .deb
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          ARCH=${{ matrix.arch }}
+          PKG_DIR="memtrace_${VERSION}_${ARCH}"
+
+          mkdir -p ${PKG_DIR}/DEBIAN
+          mkdir -p ${PKG_DIR}/usr/bin
+          mkdir -p ${PKG_DIR}/etc/memtrace
+          mkdir -p ${PKG_DIR}/lib/systemd/system
+          mkdir -p ${PKG_DIR}/var/lib/memtrace
+
+          install -m 755 memtrace-${{ matrix.suffix }} ${PKG_DIR}/usr/bin/memtrace
+          install -m 755 memtrace-mcp-${{ matrix.suffix }} ${PKG_DIR}/usr/bin/memtrace-mcp
+
+          # Default config — operators override via env file
+          install -m 644 memtrace.toml ${PKG_DIR}/etc/memtrace/memtrace.toml
+          install -m 644 deploy/systemd/memtrace.service ${PKG_DIR}/lib/systemd/system/memtrace.service
+          install -m 600 deploy/systemd/memtrace.environment.example ${PKG_DIR}/etc/memtrace/environment
+
+          cat > ${PKG_DIR}/DEBIAN/control << EOF
+          Package: memtrace
+          Version: ${VERSION}
+          Section: misc
+          Priority: optional
+          Architecture: ${ARCH}
+          Depends: libc6
+          Maintainer: Basekick Labs <contact@basekick.net>
+          Description: Multi-tenant memory layer for AI agents
+           Memtrace is a server-side memory layer for AI agents, backed by Arc
+           time-series storage. A single deployment can serve many organizations,
+           each routed to its own Arc instance with per-org API keys encrypted
+           at rest.
+           .
+           Features include multi-tenant routing, AES-256-GCM envelope encryption
+           of per-org Arc credentials, an MCP server, and admin CLI.
+          Homepage: https://github.com/Basekick-Labs/memtrace
+          EOF
+
+          cat > ${PKG_DIR}/DEBIAN/conffiles << 'EOF'
+          /etc/memtrace/memtrace.toml
+          /etc/memtrace/environment
+          EOF
+
+          cat > ${PKG_DIR}/DEBIAN/postinst << 'POSTINST'
+          #!/bin/bash
+          set -e
+
+          # Create memtrace user
+          if ! id -u memtrace > /dev/null 2>&1; then
+            useradd --system --home-dir /var/lib/memtrace --no-create-home --shell /usr/sbin/nologin memtrace
+          fi
+
+          chown -R memtrace:memtrace /var/lib/memtrace
+          chown root:memtrace /etc/memtrace/environment
+          chmod 640 /etc/memtrace/environment
+
+          if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload
+            echo
+            echo "Memtrace installed."
+            echo
+            echo "  1. Set MEMTRACE_MASTER_KEY in /etc/memtrace/environment"
+            echo "     Generate one with: memtrace keygen master"
+            echo
+            echo "  2. Start the service:"
+            echo "     sudo systemctl enable --now memtrace"
+            echo
+            echo "  3. Provision an organization and Arc instance:"
+            echo "     sudo -u memtrace -E memtrace org create <name>"
+            echo "     sudo -u memtrace -E memtrace org add-arc <org_id> --url ... --api-key ... --database ..."
+            echo
+          fi
+          POSTINST
+          chmod +x ${PKG_DIR}/DEBIAN/postinst
+
+          cat > ${PKG_DIR}/DEBIAN/prerm << 'PRERM'
+          #!/bin/bash
+          set -e
+          if command -v systemctl >/dev/null 2>&1; then
+            systemctl stop memtrace.service || true
+            systemctl disable memtrace.service || true
+          fi
+          PRERM
+          chmod +x ${PKG_DIR}/DEBIAN/prerm
+
+          dpkg-deb --build ${PKG_DIR}
+          sha256sum ${PKG_DIR}.deb > ${PKG_DIR}.deb.sha256
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: memtrace-debian-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}
+          path: |
+            *.deb
+            *.deb.sha256
+          retention-days: 7
+
+  # --------------------------------------------------------------------
+  # 6. RPM packages
+  # --------------------------------------------------------------------
+  rpm-build:
+    name: Build RPM Package
+    runs-on: ubuntu-latest
+    needs: [prepare, build-binaries-linux]
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            suffix: linux-amd64
+          - arch: aarch64
+            suffix: linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install RPM tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: memtrace-binaries-${{ matrix.suffix }}
+
+      - name: Build .rpm
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          ARCH=${{ matrix.arch }}
+
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+          mkdir -p memtrace-${VERSION}
+          install -m 755 memtrace-${{ matrix.suffix }} memtrace-${VERSION}/memtrace
+          install -m 755 memtrace-mcp-${{ matrix.suffix }} memtrace-${VERSION}/memtrace-mcp
+          cp memtrace.toml memtrace-${VERSION}/
+
+          tar -czf ~/rpmbuild/SOURCES/memtrace-${VERSION}.tar.gz memtrace-${VERSION}
+
+          cp deploy/systemd/memtrace.service ~/rpmbuild/SOURCES/memtrace.service
+          cp deploy/systemd/memtrace.environment.example ~/rpmbuild/SOURCES/memtrace.environment
+
+          cat > ~/rpmbuild/SPECS/memtrace.spec << EOF
+          Name:           memtrace
+          Version:        ${VERSION}
+          Release:        1%{?dist}
+          Summary:        Multi-tenant memory layer for AI agents
+          License:        Apache-2.0
+          URL:            https://github.com/Basekick-Labs/memtrace
+          Source0:        memtrace-${VERSION}.tar.gz
+          Source1:        memtrace.service
+          Source2:        memtrace.environment
+
+          %description
+          Memtrace is a server-side memory layer for AI agents, backed by Arc
+          time-series storage. A single deployment can serve many organizations,
+          each routed to its own Arc instance with per-org API keys encrypted
+          at rest using AES-256-GCM.
+
+          %prep
+          %setup -q
+
+          %install
+          rm -rf %{buildroot}
+          mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/etc/memtrace
+          mkdir -p %{buildroot}/lib/systemd/system
+          mkdir -p %{buildroot}/var/lib/memtrace
+
+          install -m 755 memtrace %{buildroot}/usr/bin/memtrace
+          install -m 755 memtrace-mcp %{buildroot}/usr/bin/memtrace-mcp
+          install -m 644 memtrace.toml %{buildroot}/etc/memtrace/memtrace.toml
+          install -m 644 %{SOURCE1} %{buildroot}/lib/systemd/system/memtrace.service
+          install -m 600 %{SOURCE2} %{buildroot}/etc/memtrace/environment
+
+          %files
+          %attr(755, root, root) /usr/bin/memtrace
+          %attr(755, root, root) /usr/bin/memtrace-mcp
+          %config(noreplace) /etc/memtrace/memtrace.toml
+          %config(noreplace) %attr(640, root, memtrace) /etc/memtrace/environment
+          /lib/systemd/system/memtrace.service
+          %dir %attr(755, memtrace, memtrace) /var/lib/memtrace
+
+          %pre
+          if ! id -u memtrace > /dev/null 2>&1; then
+            useradd --system --home-dir /var/lib/memtrace --no-create-home --shell /sbin/nologin memtrace
+          fi
+
+          %post
+          systemctl daemon-reload
+          echo
+          echo "Memtrace installed."
+          echo
+          echo "  1. Set MEMTRACE_MASTER_KEY in /etc/memtrace/environment"
+          echo "     Generate one with: memtrace keygen master"
+          echo "  2. sudo systemctl enable --now memtrace"
+          echo
+
+          %preun
+          systemctl stop memtrace.service || true
+          systemctl disable memtrace.service || true
+
+          %changelog
+          * $(date "+%a %b %d %Y") Basekick Labs <contact@basekick.net> - ${VERSION}-1
+          - Release ${VERSION}
+          EOF
+
+          rpmbuild -ba --target ${ARCH} ~/rpmbuild/SPECS/memtrace.spec
+
+          cp ~/rpmbuild/RPMS/${ARCH}/memtrace-${VERSION}-1.*.rpm .
+          sha256sum memtrace-${VERSION}-1.*.rpm > memtrace-${VERSION}-1.${ARCH}.rpm.sha256
+
+      - name: Upload .rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: memtrace-rpm-${{ matrix.arch }}-${{ needs.prepare.outputs.version }}
+          path: |
+            *.rpm
+            *.rpm.sha256
+          retention-days: 7
+
+  # --------------------------------------------------------------------
+  # 7. Smoke tests — Docker image + native binary boot and respond on /health
+  # --------------------------------------------------------------------
+  test-docker:
+    name: Test Docker Image
+    runs-on: ubuntu-latest
+    needs: [prepare, docker-merge]
+    steps:
+      - name: Generate a master key
+        id: key
+        run: |
+          KEY=$(openssl rand -base64 32)
+          echo "::add-mask::$KEY"
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Pull and run image
+        env:
+          MEMTRACE_MASTER_KEY: ${{ steps.key.outputs.key }}
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${VERSION}"
+          echo "Pulling $IMAGE"
+          docker pull "$IMAGE"
+
+          docker run -d --name memtrace-test -p 9100:9100 \
+            -e MEMTRACE_MASTER_KEY="$MEMTRACE_MASTER_KEY" \
+            "$IMAGE"
+
+          # Wait for health endpoint
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9100/health > /dev/null; then
+              echo "✅ Health check passed"
+              docker logs memtrace-test
+              exit 0
+            fi
+            echo "Attempt $i/30 — waiting..."
+            sleep 2
+          done
+
+          echo "❌ Health check failed after 60s"
+          docker logs memtrace-test
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop memtrace-test || true
+          docker rm memtrace-test || true
+
+  test-binary:
+    name: Test Native Binary
+    runs-on: ubuntu-latest
+    needs: [prepare, build-binaries-linux]
+    steps:
+      - name: Download amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: memtrace-binaries-linux-amd64
+
+      - name: Generate a master key
+        id: key
+        run: |
+          KEY=$(openssl rand -base64 32)
+          echo "::add-mask::$KEY"
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Run binary, hit /health
+        env:
+          MEMTRACE_MASTER_KEY: ${{ steps.key.outputs.key }}
+        run: |
+          chmod +x memtrace-linux-amd64
+          ./memtrace-linux-amd64 &
+          PID=$!
+
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:9100/health > /dev/null; then
+              echo "✅ Binary health check passed"
+              kill $PID || true
+              exit 0
+            fi
+            echo "Attempt $i/20 — waiting..."
+            sleep 2
+          done
+
+          echo "❌ Binary health check failed"
+          kill $PID || true
+          exit 1
+
+  # --------------------------------------------------------------------
+  # 8. Draft GitHub Release
+  # --------------------------------------------------------------------
+  create-draft-release:
+    name: Create Draft Release
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - docker-merge
+      - test-docker
+      - test-binary
+      - build-binaries-linux
+      - build-binaries-macos
+      - debian-build
+      - rpm-build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: memtrace-*
+          merge-multiple: true
+          path: ./release-artifacts
+
+      - name: Stage Linux binaries as tarballs
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          cd release-artifacts
+          for suffix in linux-amd64 linux-arm64; do
+            if [ -f "memtrace-${suffix}" ] && [ -f "memtrace-mcp-${suffix}" ]; then
+              tar -czf "memtrace-${suffix}.tar.gz" "memtrace-${suffix}" "memtrace-mcp-${suffix}"
+              sha256sum "memtrace-${suffix}.tar.gz" > "memtrace-${suffix}.tar.gz.sha256"
+            fi
+          done
+          ls -la
+
+      - name: Generate release notes
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          if [ -f "RELEASE_NOTES_${VERSION}.md" ]; then
+            cp "RELEASE_NOTES_${VERSION}.md" release-notes.md
+          else
+            cat > release-notes.md << EOF
+          # Memtrace v${VERSION}
+
+          See [CHANGELOG](https://github.com/Basekick-Labs/memtrace/blob/main/CHANGELOG.md) and the [README](https://github.com/Basekick-Labs/memtrace/blob/main/docs/README.md) for full details.
+
+          ## Install
+
+          ### Docker
+
+          \`\`\`bash
+          docker run -d -p 9100:9100 \\
+            -e MEMTRACE_MASTER_KEY=\$(openssl rand -base64 32) \\
+            -v memtrace-data:/app/data \\
+            ghcr.io/basekick-labs/memtrace:${VERSION}
+          \`\`\`
+
+          ### Debian / Ubuntu (amd64, arm64)
+
+          \`\`\`bash
+          wget https://github.com/Basekick-Labs/memtrace/releases/download/v${VERSION}/memtrace_${VERSION}_amd64.deb
+          sudo dpkg -i memtrace_${VERSION}_amd64.deb
+          \`\`\`
+
+          ### RHEL / Fedora / Rocky (x86_64, aarch64)
+
+          \`\`\`bash
+          wget https://github.com/Basekick-Labs/memtrace/releases/download/v${VERSION}/memtrace-${VERSION}-1.x86_64.rpm
+          sudo rpm -i memtrace-${VERSION}-1.x86_64.rpm
+          \`\`\`
+
+          ### macOS (Apple Silicon, Intel)
+
+          \`\`\`bash
+          # Apple Silicon
+          curl -L -o memtrace.tar.gz \\
+            https://github.com/Basekick-Labs/memtrace/releases/download/v${VERSION}/memtrace-darwin-arm64.tar.gz
+          tar -xzf memtrace.tar.gz
+          \`\`\`
+
+          ## Verify checksums
+
+          Each artifact has a \`.sha256\` companion file. Compare with:
+
+          \`\`\`bash
+          sha256sum -c memtrace-linux-amd64.tar.gz.sha256
+          \`\`\`
+          EOF
+          fi
+          cat release-notes.md
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: Memtrace v${{ needs.prepare.outputs.version }}
+          body_path: release-notes.md
+          files: |
+            release-artifacts/memtrace-linux-*.tar.gz
+            release-artifacts/memtrace-linux-*.tar.gz.sha256
+            release-artifacts/memtrace-darwin-*.tar.gz
+            release-artifacts/memtrace-darwin-*.tar.gz.sha256
+            release-artifacts/*.deb
+            release-artifacts/*.deb.sha256
+            release-artifacts/*.rpm
+            release-artifacts/*.rpm.sha256
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+          {
+            echo "## 🎉 Draft Release Created"
+            echo
+            echo "**Memtrace v${VERSION}**"
+            echo
+            echo "| Artifact | Path |"
+            echo "|---|---|"
+            echo "| Docker | \`ghcr.io/basekick-labs/memtrace:${VERSION}\` |"
+            echo "| Linux amd64 | \`memtrace-linux-amd64.tar.gz\` |"
+            echo "| Linux arm64 | \`memtrace-linux-arm64.tar.gz\` |"
+            echo "| macOS amd64 | \`memtrace-darwin-amd64.tar.gz\` |"
+            echo "| macOS arm64 | \`memtrace-darwin-arm64.tar.gz\` |"
+            echo "| Debian amd64 | \`memtrace_${VERSION}_amd64.deb\` |"
+            echo "| Debian arm64 | \`memtrace_${VERSION}_arm64.deb\` |"
+            echo "| RPM x86_64 | \`memtrace-${VERSION}-1.x86_64.rpm\` |"
+            echo "| RPM aarch64 | \`memtrace-${VERSION}-1.aarch64.rpm\` |"
+            echo
+            echo "Review and publish at: https://github.com/Basekick-Labs/memtrace/releases"
+          } >> $GITHUB_STEP_SUMMARY

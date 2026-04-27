@@ -1,0 +1,14 @@
+# /etc/memtrace/environment
+#
+# Required. Generate once with `memtrace keygen master` and paste below.
+# Keep this file 0600 — it is the master key that decrypts every org's
+# Arc API key in the metadata DB. Losing it makes encrypted secrets
+# unrecoverable.
+MEMTRACE_MASTER_KEY=
+
+# Optional overrides — see https://github.com/Basekick-Labs/memtrace/blob/main/docs/configuration.md
+#
+# MEMTRACE_SERVER_PORT=9100
+# MEMTRACE_LOG_LEVEL=info
+# MEMTRACE_LOG_FORMAT=json
+# MEMTRACE_AUTH_DB_PATH=/var/lib/memtrace/memtrace.db
