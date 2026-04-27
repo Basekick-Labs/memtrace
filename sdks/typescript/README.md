@@ -124,13 +124,47 @@ const forAgent = await client.listSessions('agent_1')
 await client.closeSession(session.id)
 ```
 
-## Multi-tenant Deployments
+## How clients connect
 
-A Memtrace deployment can serve multiple organizations, each routed to its own Arc instance. The SDK is unchanged — you still pass `(baseURL, apiKey)`. Memtrace looks up the organization that owns your API key and forwards reads and writes to that org's Arc instance automatically.
+A Memtrace client points at exactly two things: the **deployment URL** and an **API key**.
 
-To work against a different org, ask an administrator to run `memtrace org create` and `memtrace key create --org <org_id>`, then use that key with the same SDK call.
+```typescript
+import { Memtrace } from '@basekick-labs/memtrace-sdk'
 
-If a key is bound to an org that has no Arc instance configured yet, requests reject with `NoArcInstanceError` (see Error Handling below).
+const client = new Memtrace(
+  'https://memtrace.example.com',   // one per Memtrace deployment
+  'mtk_...'                           // one per organization
+)
+
+await client.remember('my_agent', '...')
+```
+
+The client never names an organization or an Arc instance. The API key carries the org identity opaquely — Memtrace resolves it server-side and routes the request to that org's Arc instance, with that org's database and that org's API key. Operators provision orgs on the server with the `memtrace org` and `memtrace key` admin CLI; clients only see the resulting `mtk_...` string.
+
+This is the same shape as Stripe, OpenAI, AWS — **the API key is the tenant credential.**
+
+### One client, multiple orgs
+
+A single backend that needs to write on behalf of multiple Memtrace organizations holds one client per org keyed by API key:
+
+```typescript
+class TenantClients {
+  private clients = new Map<string, Memtrace>()
+
+  forOrg(orgId: string): Memtrace {
+    if (!this.clients.has(orgId)) {
+      const apiKey = secrets.get(`memtrace_key_${orgId}`)
+      this.clients.set(orgId, new Memtrace('https://memtrace.example.com', apiKey))
+    }
+    return this.clients.get(orgId)!
+  }
+}
+
+await tenants.forOrg('org_acme').remember('...', '...')
+await tenants.forOrg('org_voya').remember('...', '...')
+```
+
+If a key is bound to an org that has no Arc instance configured yet, requests reject with `NoArcInstanceError` (see Error Handling below) — operators fix this with `memtrace org add-arc`.
 
 ## Error Handling
 

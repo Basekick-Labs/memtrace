@@ -85,6 +85,64 @@ Long-running ETL or data enrichment agents that process millions of records in b
 
 **Example:** A data enrichment agent that processes 100K company records over 3 days, remembering which ones are done, which APIs timed out, and which need retry.
 
+## How clients connect
+
+A Memtrace client points at exactly two things: the **deployment URL** and an **API key**. That's it.
+
+```python
+from memtrace import Memtrace
+
+client = Memtrace(
+    base_url="https://memtrace.example.com",   # one per Memtrace deployment
+    api_key="mtk_..."                            # one per organization
+)
+
+client.remember(agent_id="my_agent", content="...")
+```
+
+Clients never name an organization or an Arc instance. The API key carries the org identity opaquely — Memtrace resolves it server-side and routes the request to that org's Arc instance, with that org's database and that org's API key. Operators provision orgs and Arc bindings on the server with `memtrace org` and `memtrace key`; clients only see the resulting `mtk_...` string.
+
+This is the same shape as Stripe, OpenAI, AWS — **the API key is the tenant credential.**
+
+### One client, multiple orgs
+
+A single backend that needs to write on behalf of multiple Memtrace organizations holds one API key per org and routes between them in its own code. The SDK is unchanged.
+
+```python
+class TenantClients:
+    def __init__(self):
+        self._clients = {}
+
+    def for_org(self, org_id: str) -> Memtrace:
+        if org_id not in self._clients:
+            api_key = secrets.get(f"memtrace_key_{org_id}")
+            self._clients[org_id] = Memtrace("https://memtrace.example.com", api_key)
+        return self._clients[org_id]
+
+tenants.for_org("org_acme").remember(...)
+tenants.for_org("org_voya").remember(...)
+```
+
+### What the client cannot do
+
+- **Override the Arc routing.** A client cannot say "this request goes to a different Arc." If a process needs to talk to two Arcs, it holds two API keys (above).
+- **Pick which org to write to.** The org is implied by the API key, never by a request parameter or header. This keeps the security boundary tight: a compromised client can only affect its own org.
+
+### Operator workflow for a new tenant
+
+```bash
+# On the Memtrace server (admin CLI)
+memtrace org create acme                      # → org_a1b2c3d4...
+memtrace org add-arc org_a1b2c3d4... \
+    --url https://arc-acme.example.com \
+    --api-key <arc-key> \
+    --database acme_memory
+memtrace key create --org org_a1b2c3d4... --name acme-prod
+# → mtk_xxx... (give this to the Acme team)
+```
+
+The Acme team then uses `Memtrace("https://memtrace.example.com", "mtk_xxx...")` — and every read and write lands in `arc-acme.example.com / acme_memory` automatically.
+
 ## Quick Start
 
 ### 1. Prerequisites
