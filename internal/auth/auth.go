@@ -188,7 +188,7 @@ func (m *Manager) VerifyKey(key string) *KeyInfo {
 			continue
 		}
 
-		if expiresAt.Valid && now.After(expiresAt.Time) {
+		if expiresAt.Valid && !now.Before(expiresAt.Time) {
 			return nil
 		}
 
@@ -207,11 +207,17 @@ func (m *Manager) VerifyKey(key string) *KeyInfo {
 			info.ExpiresAt = expiresAt.Time
 		}
 
+		// Never let the cache outlive the API key itself.
+		cacheExpiresAt := now.Add(m.cacheTTL)
+		if expiresAt.Valid && expiresAt.Time.Before(cacheExpiresAt) {
+			cacheExpiresAt = expiresAt.Time
+		}
+
 		// Cache it
 		m.cacheMu.Lock()
 		m.cache[cacheK] = cacheEntry{
 			info:      info,
-			expiresAt: now.Add(m.cacheTTL),
+			expiresAt: cacheExpiresAt,
 		}
 		m.cacheMu.Unlock()
 
