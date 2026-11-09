@@ -720,6 +720,10 @@ components:
       type: object
       required: [time, org_id, agent_id, memory_type, event_type, content]
       properties:
+        id:
+          type: string
+          description: Immutable identifier assigned to memories created after ID support was introduced.
+          example: mem_0123456789abcdef0123456789abcdef
         time:
           type: string
           format: date-time
@@ -836,6 +840,9 @@ components:
     SearchQuery:
       type: object
       properties:
+        id:
+          type: string
+          description: Exact immutable memory identifier.
         agent_id:
           type: string
         session_id:

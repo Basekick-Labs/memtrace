@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -90,8 +92,14 @@ func (m *Manager) Create(ctx context.Context, orgID string, req *CreateRequest) 
 	}
 
 	now := time.Now().UTC()
+	idBytes := make([]byte, 16)
+	if _, err := rand.Read(idBytes); err != nil {
+		return nil, fmt.Errorf("generate memory ID: %w", err)
+	}
+	memoryID := "mem_" + hex.EncodeToString(idBytes)
 
 	record := map[string]interface{}{
+		"id":            memoryID,
 		"time":          now.UnixNano(),
 		"org_id":        orgID,
 		"agent_id":      req.AgentID,
@@ -115,6 +123,7 @@ func (m *Manager) Create(ctx context.Context, orgID string, req *CreateRequest) 
 	}
 
 	mem := &Memory{
+		ID:         memoryID,
 		Time:       now,
 		OrgID:      orgID,
 		AgentID:    req.AgentID,
@@ -342,6 +351,9 @@ func buildSearchSQL(orgID string, q *SearchQuery) string {
 	var conditions []string
 	conditions = append(conditions, sanitize.SQLCondition("org_id", orgID))
 
+	if q.ID != "" {
+		conditions = append(conditions, sanitize.SQLCondition("id", q.ID))
+	}
 	if q.AgentID != "" {
 		conditions = append(conditions, sanitize.SQLCondition("agent_id", q.AgentID))
 	}
@@ -415,6 +427,9 @@ func parseUntil(until string) string {
 func rowToMemory(row map[string]interface{}) Memory {
 	mem := Memory{}
 
+	if v, ok := row["id"].(string); ok {
+		mem.ID = v
+	}
 	if v, ok := row["time"]; ok {
 		switch t := v.(type) {
 		case string:

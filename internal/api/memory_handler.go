@@ -115,11 +115,11 @@ func (h *MemoryHandler) handleList(c *fiber.Ctx) error {
 
 func (h *MemoryHandler) handleGet(c *fiber.Ctx) error {
 	orgID := auth.GetOrgID(c)
-	dedupKey := c.Params("id")
+	memoryID := c.Params("id")
 
 	result, err := h.manager.Search(c.Context(), orgID, &memory.SearchQuery{
-		ContentContains: dedupKey,
-		Limit:           1,
+		ID:    memoryID,
+		Limit: 1,
 	})
 	if err != nil {
 		return writeError(c, err)
