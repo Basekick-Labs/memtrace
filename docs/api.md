@@ -160,7 +160,7 @@ List memories with filters.
 
 ### GET /api/v1/memories/:id
 
-Get a specific memory by ID.
+Get a specific memory by its immutable ID. New memories receive a `mem_`-prefixed random ID and include it in create, list, and search responses. Memories written before ID support was introduced do not have an ID and cannot be retrieved through this endpoint.
 
 ## Agents
 

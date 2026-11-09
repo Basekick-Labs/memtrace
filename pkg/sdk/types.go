@@ -4,6 +4,7 @@ import "time"
 
 // Memory represents a stored memory event
 type Memory struct {
+	ID         string                 `json:"id,omitempty"`
 	Time       time.Time              `json:"time"`
 	OrgID      string                 `json:"org_id"`
 	AgentID    string                 `json:"agent_id"`
@@ -55,6 +56,7 @@ type MemoryList struct {
 
 // SearchQuery is the request body for searching memories
 type SearchQuery struct {
+	ID              string   `json:"id,omitempty"`
 	AgentID         string   `json:"agent_id,omitempty"`
 	SessionID       string   `json:"session_id,omitempty"`
 	MemoryTypes     []string `json:"memory_types,omitempty"`

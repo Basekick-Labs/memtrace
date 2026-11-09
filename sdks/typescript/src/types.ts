@@ -5,6 +5,7 @@ export type MemoryType = "episodic" | "session" | "decision" | "entity";
 
 /** A stored memory event. */
 export interface Memory {
+  id?: string;
   time: string;
   org_id: string;
   agent_id: string;
@@ -56,6 +57,7 @@ export interface MemoryList {
 
 /** Request body for searching memories. */
 export interface SearchQuery {
+  id?: string;
   agent_id?: string;
   session_id?: string;
   memory_types?: string[];

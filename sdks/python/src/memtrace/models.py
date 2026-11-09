@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 class Memory(BaseModel):
     """A stored memory event."""
 
+    id: str | None = None
     time: datetime
     org_id: str
     agent_id: str
@@ -69,6 +70,7 @@ class MemoryList(BaseModel):
 class SearchQuery(BaseModel):
     """Request body for searching memories."""
 
+    id: str | None = None
     agent_id: str | None = None
     session_id: str | None = None
     memory_types: list[str] | None = None
