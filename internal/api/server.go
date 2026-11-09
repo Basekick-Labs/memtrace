@@ -64,6 +64,7 @@ func NewServer(
 	apiGroup := app.Group("/api/v1")
 	if authManager != nil && cfg.Auth.Enabled {
 		apiGroup.Use(auth.RequireAuth(authManager))
+		apiGroup.Use(auth.RequirePermission())
 	}
 
 	// Register handlers
